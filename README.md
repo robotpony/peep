@@ -1,6 +1,7 @@
-# Peep at a project
+# (p)eep at a folder of repositories
 
-This is a quick script to summarize the projects the specified folders (or from the CWD).
+This is a quick script that dumps a summary the projects the specified folders (or from the CWD). It answers 
+the question, "where are these projects at," more or less.
 
 ## Usage
 
@@ -16,6 +17,7 @@ Projects in /Users/mx/projects
 │ w42                  │ w42             │ main   │                              │ 0     │
 │ oview - ollama visu… │ oview           │ main   │ Python                       │ 0     │
 │ Thwarter Interactiv… │ thwarter        │ main   │ Rust                         │ 297   │
+│ ⌥⌘ SPACE COMMAND, T… │ spacecommand.c… │ main   │                              │ 0     │
 │ SpaceCommand         │ spacecommand.ca │ main   │ JS, node.js, npm, react      │ 116   │
 │ Robotpony Render     │ robotpony-rend… │ main   │ JS, node.js, npm, typescript │ 0     │
 │ statsim              │ statsim         │ main   │ JS, node.js, npm, typescript │ 245   │
