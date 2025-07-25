@@ -141,10 +141,6 @@ def get_project_info(project_path):
     # Detect technologies
     technologies = detect_technologies(project_path)
     
-    # Check for documentation files
-    has_readme = readme_path.exists()
-    has_claude = (project_path / 'CLAUDE.md').exists() or (project_path / 'claude.md').exists()
-    
     # Count TODO lines
     todo_lines = count_todo_lines(project_path)
     
@@ -160,8 +156,6 @@ def get_project_info(project_path):
         'name': project_name,
         'branch': git_branch,
         'technologies': technologies,
-        'has_readme': has_readme,
-        'has_claude': has_claude,
         'todo_lines': todo_lines,
         'mod_time': mod_time,
         'create_time': create_time,
@@ -206,7 +200,7 @@ def calculate_column_widths(projects):
     terminal_width = shutil.get_terminal_size().columns
     
     # Minimum widths for headers
-    widths = [len("Name"), len("Folder"), len("Branch"), len("Technologies"), len("Documentation"), len("TODOs")]
+    widths = [len("Name"), len("Folder"), len("Branch"), len("Technologies"), len("TODOs")]
     
     for project in projects:
         # Project name - cap at 20 characters
@@ -225,18 +219,9 @@ def calculate_column_widths(projects):
         tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
         widths[3] = max(widths[3], len(tech_text))
         
-        # Documentation
-        docs = []
-        if project['has_readme']:
-            docs.append("readme")
-        if project['has_claude']:
-            docs.append("claude")
-        doc_text = ', '.join(docs)
-        widths[4] = max(widths[4], len(doc_text))
-        
         # TODOs
         todo_text = str(project['todo_lines'])
-        widths[5] = max(widths[5], len(todo_text))
+        widths[4] = max(widths[4], len(todo_text))
     
     # Enforce maximum widths
     widths[0] = min(widths[0], 20)  # Name column max 20
@@ -271,14 +256,6 @@ def format_table_row(project, widths):
     # Technologies
     tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
     
-    # Documentation
-    docs = []
-    if project['has_readme']:
-        docs.append("readme")
-    if project['has_claude']:
-        docs.append("claude")
-    doc_text = ', '.join(docs)
-    
     # TODOs
     todo_text = str(project['todo_lines'])
     
@@ -291,12 +268,10 @@ def format_table_row(project, widths):
         branch_text = branch_text[:widths[2]-1] + "…"
     if len(tech_text) > widths[3]:
         tech_text = tech_text[:widths[3]-1] + "…"
-    if len(doc_text) > widths[4]:
-        doc_text = doc_text[:widths[4]-1] + "…"
-    if len(todo_text) > widths[5]:
-        todo_text = todo_text[:widths[5]-1] + "…"
+    if len(todo_text) > widths[4]:
+        todo_text = todo_text[:widths[4]-1] + "…"
     
-    return f"│ {project_name:<{widths[0]}} │ {folder_name:<{widths[1]}} │ {branch_text:<{widths[2]}} │ {tech_text:<{widths[3]}} │ {doc_text:<{widths[4]}} │ {todo_text:<{widths[5]}} │"
+    return f"│ {project_name:<{widths[0]}} │ {folder_name:<{widths[1]}} │ {branch_text:<{widths[2]}} │ {tech_text:<{widths[3]}} │ {todo_text:<{widths[4]}} │"
 
 def format_table_separator(widths, top=False, bottom=False):
     """Format table separator line."""
@@ -315,7 +290,7 @@ def format_table_separator(widths, top=False, bottom=False):
 
 def format_table_header(widths):
     """Format the table header row."""
-    headers = ["Name", "Folder", "Branch", "Technologies", "Documentation", "TODOs"]
+    headers = ["Name", "Folder", "Branch", "Technologies", "TODOs"]
     formatted_headers = [f" {header:<{width}} " for header, width in zip(headers, widths)]
     return "│" + "│".join(formatted_headers) + "│"
 

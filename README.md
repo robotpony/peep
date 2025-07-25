@@ -9,19 +9,18 @@ p [folder] [options]
 
 Projects in /Users/mx/projects
 
-┌──────────────────────┬─────────────────┬────────┬──────────────────────────────┬────────────────┬───────┐
-│ Name                 │ Folder          │ Branch │ Technologies                 │ Documentation  │ TODOs │
-├──────────────────────┼─────────────────┼────────┼──────────────────────────────┼────────────────┼───────┤
-│ Peep at a project    │ peep            │ main   │                              │ readme, claude │ 5     │
-│ w42                  │ w42             │ main   │                              │                │ 0     │
-│ oview - ollama visu… │ oview           │ main   │ Python                       │ readme, claude │ 0     │
-│ Thwarter Interactiv… │ thwarter        │ main   │ Rust                         │ readme, claude │ 297   │
-│ ⌥⌘ SPACE COMMAND, T… │ spacecommand.c… │ main   │                              │ readme, claude │ 0     │
-│ SpaceCommand         │ spacecommand.ca │ main   │ JS, node.js, npm, react      │ readme, claude │ 116   │
-│ Robotpony Render     │ robotpony-rend… │ main   │ JS, node.js, npm, typescript │ readme, claude │ 0     │
-│ statsim              │ statsim         │ main   │ JS, node.js, npm, typescript │ readme, claude │ 245   │
-│ brucealderson.ca.20… │ brucealderson.… │ main   │                              │ readme         │ 0     │
-└──────────────────────┴─────────────────┴────────┴──────────────────────────────┴────────────────┴───────┘
+┌──────────────────────┬─────────────────┬────────┬──────────────────────────────┬───────┐
+│ Name                 │ Folder          │ Branch │ Technologies                 │ TODOs │
+├──────────────────────┼─────────────────┼────────┼──────────────────────────────┼───────┤
+│ Peep at a project    │ peep            │ main   │                              │ 5     │
+│ w42                  │ w42             │ main   │                              │ 0     │
+│ oview - ollama visu… │ oview           │ main   │ Python                       │ 0     │
+│ Thwarter Interactiv… │ thwarter        │ main   │ Rust                         │ 297   │
+│ SpaceCommand         │ spacecommand.ca │ main   │ JS, node.js, npm, react      │ 116   │
+│ Robotpony Render     │ robotpony-rend… │ main   │ JS, node.js, npm, typescript │ 0     │
+│ statsim              │ statsim         │ main   │ JS, node.js, npm, typescript │ 245   │
+│ brucealderson.ca.20… │ brucealderson.… │ main   │                              │ 0     │
+└──────────────────────┴─────────────────┴────────┴──────────────────────────────┴───────┘
 ```
 
 ### Notes
