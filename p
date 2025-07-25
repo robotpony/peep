@@ -200,7 +200,7 @@ def calculate_column_widths(projects):
     terminal_width = shutil.get_terminal_size().columns
     
     # Minimum widths for headers
-    widths = [len("Name"), len("Folder"), len("Branch"), len("Technologies"), len("TODOs")]
+    widths = [len("Project"), len("Path"), len("Branch"), len("Tech"), len("TODOs")]
     
     for project in projects:
         # Project name - cap at 20 characters

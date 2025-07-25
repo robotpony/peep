@@ -5,7 +5,7 @@ This is a quick script to summarize the projects the specified folders (or from 
 ## Usage
 
 ```
-p [folder] [options]
+$ p
 
 Projects in /Users/mx/projects
 
