@@ -9,18 +9,19 @@ p [folder] [options]
 
 Projects in /Users/mx/projects
 
-┌─────────────────────────────────────────────┬───────────────────────────┬──────────┬────────────────────────────┬───────────────┐
-│ Name                                        │ Folder                    │ Branch   │ Technologies               │ Documentation │
-├─────────────────────────────────────────────┼───────────────────────────┼──────────┼────────────────────────────┼───────────────┤
-│ Peep at a project                           │ peep                      │ main     │                            │ readme, clau… │
-│ w42                                         │ w42                       │ main     │                            │               │
-│ oview - ollama visualizer                   │ oview                     │ main     │ Python                     │ readme, clau… │
-│ Thwarter Interactive Fiction                │ thwarter                  │ main     │ Rust                       │ readme, clau… │
-│ ⌥⌘ SPACE COMMAND, THE FRICKN PLACEHOLDER S… │ spacecommand.ca.placehol… │ main     │                            │ readme, clau… │
-│ SpaceCommand                                │ spacecommand.ca           │ main     │ JS, node.js, npm, react    │ readme, clau… │
-│ Robotpony Render                            │ robotpony-render          │ main     │ JS, node.js, npm, typescr… │ readme, clau… │
-│ statsim                                     │ statsim                   │ main     │ JS, node.js, npm, typescr… │ readme, clau… │
-└─────────────────────────────────────────────┴───────────────────────────┴──────────┴────────────────────────────┴───────────────┘
+┌──────────────────────┬─────────────────┬────────┬──────────────────────────────┬────────────────┬───────┐
+│ Name                 │ Folder          │ Branch │ Technologies                 │ Documentation  │ TODOs │
+├──────────────────────┼─────────────────┼────────┼──────────────────────────────┼────────────────┼───────┤
+│ Peep at a project    │ peep            │ main   │                              │ readme, claude │ 5     │
+│ w42                  │ w42             │ main   │                              │                │ 0     │
+│ oview - ollama visu… │ oview           │ main   │ Python                       │ readme, claude │ 0     │
+│ Thwarter Interactiv… │ thwarter        │ main   │ Rust                         │ readme, claude │ 297   │
+│ ⌥⌘ SPACE COMMAND, T… │ spacecommand.c… │ main   │                              │ readme, claude │ 0     │
+│ SpaceCommand         │ spacecommand.ca │ main   │ JS, node.js, npm, react      │ readme, claude │ 116   │
+│ Robotpony Render     │ robotpony-rend… │ main   │ JS, node.js, npm, typescript │ readme, claude │ 0     │
+│ statsim              │ statsim         │ main   │ JS, node.js, npm, typescript │ readme, claude │ 245   │
+│ brucealderson.ca.20… │ brucealderson.… │ main   │                              │ readme         │ 0     │
+└──────────────────────┴─────────────────┴────────┴──────────────────────────────┴────────────────┴───────┘
 ```
 
 ### Notes

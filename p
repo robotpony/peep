@@ -87,6 +87,45 @@ def detect_technologies(project_path):
     
     return list(dict.fromkeys(technologies))  # Remove duplicates while preserving order
 
+def count_todo_lines(project_path):
+    """Count lines in files with 'TODO' in uppercase in the title."""
+    project_path = Path(project_path)
+    total_lines = 0
+    
+    # Define subfolders to check for TODO files
+    subfolders_to_check = ['tasks', 'docs', 'design']
+    
+    def scan_directory(dir_path):
+        """Recursively scan a directory for TODO files."""
+        lines = 0
+        try:
+            for item in dir_path.iterdir():
+                if item.is_file():
+                    name = item.name.upper()
+                    # Check if filename contains TODO and has .txt, .md extension or no extension
+                    if 'TODO' in name:
+                        if (name.endswith('.TXT') or name.endswith('.MD') or 
+                            '.' not in name or name.split('.')[-1].upper() in ['TXT', 'MD']):
+                            try:
+                                with open(item, 'r', encoding='utf-8', errors='ignore') as f:
+                                    lines += sum(1 for _ in f)
+                            except (PermissionError, UnicodeDecodeError):
+                                pass
+        except PermissionError:
+            pass
+        return lines
+    
+    # Scan root directory
+    total_lines += scan_directory(project_path)
+    
+    # Scan specific subfolders
+    for subfolder in subfolders_to_check:
+        subfolder_path = project_path / subfolder
+        if subfolder_path.exists() and subfolder_path.is_dir():
+            total_lines += scan_directory(subfolder_path)
+    
+    return total_lines
+
 def get_project_info(project_path):
     """Get comprehensive information about a project."""
     project_path = Path(project_path)
@@ -106,6 +145,9 @@ def get_project_info(project_path):
     has_readme = readme_path.exists()
     has_claude = (project_path / 'CLAUDE.md').exists() or (project_path / 'claude.md').exists()
     
+    # Count TODO lines
+    todo_lines = count_todo_lines(project_path)
+    
     # Get modification times
     try:
         mod_time = project_path.stat().st_mtime
@@ -120,6 +162,7 @@ def get_project_info(project_path):
         'technologies': technologies,
         'has_readme': has_readme,
         'has_claude': has_claude,
+        'todo_lines': todo_lines,
         'mod_time': mod_time,
         'create_time': create_time,
         'path': project_path
@@ -163,16 +206,16 @@ def calculate_column_widths(projects):
     terminal_width = shutil.get_terminal_size().columns
     
     # Minimum widths for headers
-    widths = [len("Name"), len("Folder"), len("Branch"), len("Technologies"), len("Documentation")]
+    widths = [len("Name"), len("Folder"), len("Branch"), len("Technologies"), len("Documentation"), len("TODOs")]
     
     for project in projects:
-        # Project name
+        # Project name - cap at 20 characters
         project_name = project['name']
-        widths[0] = max(widths[0], len(project_name))
+        widths[0] = max(widths[0], min(len(project_name), 20))
         
-        # Folder name
+        # Folder name - cap at 15 characters
         folder_name = project['folder']
-        widths[1] = max(widths[1], len(folder_name))
+        widths[1] = max(widths[1], min(len(folder_name), 15))
         
         # Branch
         branch_text = project['branch'] or ""
@@ -190,6 +233,14 @@ def calculate_column_widths(projects):
             docs.append("claude")
         doc_text = ', '.join(docs)
         widths[4] = max(widths[4], len(doc_text))
+        
+        # TODOs
+        todo_text = str(project['todo_lines'])
+        widths[5] = max(widths[5], len(todo_text))
+    
+    # Enforce maximum widths
+    widths[0] = min(widths[0], 20)  # Name column max 20
+    widths[1] = min(widths[1], 15)  # Folder column max 15
     
     # Calculate table overhead (borders and padding)
     table_overhead = len(widths) * 3 + 1  # │ col │ col │ etc
@@ -200,6 +251,9 @@ def calculate_column_widths(projects):
     if total_width > available_width:
         ratio = available_width / total_width
         widths = [max(8, int(w * ratio)) for w in widths]  # Minimum 8 chars per column
+        # Re-enforce maximums after proportional reduction
+        widths[0] = min(widths[0], 20)  # Name column max 20
+        widths[1] = min(widths[1], 15)  # Folder column max 15
     
     return widths
 
@@ -225,6 +279,9 @@ def format_table_row(project, widths):
         docs.append("claude")
     doc_text = ', '.join(docs)
     
+    # TODOs
+    todo_text = str(project['todo_lines'])
+    
     # Truncate if too long (with ellipsis for visual indication)
     if len(project_name) > widths[0]:
         project_name = project_name[:widths[0]-1] + "…"
@@ -236,8 +293,10 @@ def format_table_row(project, widths):
         tech_text = tech_text[:widths[3]-1] + "…"
     if len(doc_text) > widths[4]:
         doc_text = doc_text[:widths[4]-1] + "…"
+    if len(todo_text) > widths[5]:
+        todo_text = todo_text[:widths[5]-1] + "…"
     
-    return f"│ {project_name:<{widths[0]}} │ {folder_name:<{widths[1]}} │ {branch_text:<{widths[2]}} │ {tech_text:<{widths[3]}} │ {doc_text:<{widths[4]}} │"
+    return f"│ {project_name:<{widths[0]}} │ {folder_name:<{widths[1]}} │ {branch_text:<{widths[2]}} │ {tech_text:<{widths[3]}} │ {doc_text:<{widths[4]}} │ {todo_text:<{widths[5]}} │"
 
 def format_table_separator(widths, top=False, bottom=False):
     """Format table separator line."""
@@ -256,7 +315,7 @@ def format_table_separator(widths, top=False, bottom=False):
 
 def format_table_header(widths):
     """Format the table header row."""
-    headers = ["Name", "Folder", "Branch", "Technologies", "Documentation"]
+    headers = ["Name", "Folder", "Branch", "Technologies", "Documentation", "TODOs"]
     formatted_headers = [f" {header:<{width}} " for header, width in zip(headers, widths)]
     return "│" + "│".join(formatted_headers) + "│"
 
