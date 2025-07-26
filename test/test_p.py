@@ -10,25 +10,20 @@ import os
 # Add the parent directory to sys.path so we can import 'p'
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import functions from p (the script) - rename to .py for import
+# Import functions from p (the script) using exec
 import importlib.util
-import shutil as shell_util
 p_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "p")
 
-# Create a temporary .py copy for importing
-temp_py_path = p_script_path + ".py"
-shell_util.copy2(p_script_path, temp_py_path)
+# Read and execute the p script
+with open(p_script_path, 'r') as f:
+    p_code = f.read()
 
-try:
-    spec = importlib.util.spec_from_file_location("p_module", temp_py_path)
-    if spec is None:
-        raise ImportError(f"Could not load spec from {temp_py_path}")
-    p_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(p_module)
-finally:
-    # Clean up temp file
-    if os.path.exists(temp_py_path):
-        os.remove(temp_py_path)
+# Create a module object to store the functions
+import types
+p_module = types.ModuleType('p_module')
+
+# Execute the code in the module's namespace
+exec(p_code, p_module.__dict__)
 
 class TestProjectScanner(unittest.TestCase):
     
@@ -121,6 +116,67 @@ class TestProjectScanner(unittest.TestCase):
         projects = p_module.scan_projects(self.test_path)
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0]['folder'], 'test-project')
+    
+    def test_config_loading(self):
+        """Test configuration loading."""
+        # Test that config object exists and has expected attributes
+        self.assertTrue(hasattr(p_module.config, 'max_project_name_length'))
+        self.assertTrue(hasattr(p_module.config, 'git_timeout'))
+        self.assertTrue(hasattr(p_module.config, 'exclude_dirs'))
+    
+    def test_depth_limiting(self):
+        """Test depth limiting in directory scanning."""
+        # Create nested directories
+        deep_dir = self.test_path / "level1" / "level2" / "level3"
+        deep_dir.mkdir(parents=True)
+        (deep_dir / "README.md").write_text("# Deep Project")
+        
+        # Scan with default depth (should find it)
+        projects = p_module.scan_projects(self.test_path)
+        self.assertTrue(any(p['name'] == 'Deep Project' for p in projects))
+        
+        # Test with limited depth by temporarily changing config
+        original_depth = p_module.config.max_scan_depth
+        p_module.config.max_scan_depth = 1
+        try:
+            projects_limited = p_module.scan_projects(self.test_path)
+            # Should not find the deep project with limited depth
+            self.assertFalse(any(p['name'] == 'Deep Project' for p in projects_limited))
+        finally:
+            # Restore original depth
+            p_module.config.max_scan_depth = original_depth
+    
+    def test_custom_technology_detection(self):
+        """Test custom technology detection."""
+        # Add custom tech file to config
+        original_custom = p_module.config.custom_tech_files.copy()
+        p_module.config.custom_tech_files['test.config'] = ['CustomTech']
+        
+        try:
+            (self.test_path / "test.config").write_text("custom config")
+            technologies = p_module.detect_technologies(self.test_path)
+            self.assertIn("CustomTech", technologies)
+        finally:
+            # Restore original config
+            p_module.config.custom_tech_files = original_custom
+    
+    def test_filtering(self):
+        """Test directory filtering."""
+        # Create directories that should be excluded
+        excluded_dir = self.test_path / "__pycache__"
+        excluded_dir.mkdir()
+        (excluded_dir / "README.md").write_text("# Should be excluded")
+        
+        # Create a normal project
+        normal_dir = self.test_path / "normal-project"
+        normal_dir.mkdir()
+        (normal_dir / "README.md").write_text("# Normal Project")
+        
+        projects = p_module.scan_projects(self.test_path)
+        project_names = [p['name'] for p in projects]
+        
+        self.assertIn("Normal Project", project_names)
+        self.assertNotIn("Should be excluded", project_names)
 
 if __name__ == '__main__':
     unittest.main()

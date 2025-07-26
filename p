@@ -10,25 +10,82 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Union
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        tomllib = None
 
 VERSION = "1.0.0"
 
-# Configuration constants
-MAX_PROJECT_NAME_LENGTH = 25
-MAX_FOLDER_NAME_LENGTH = 20
-MIN_COLUMN_WIDTH = 8
-DEFAULT_GIT_BRANCH = 'main'
-GIT_TIMEOUT = 5
+class Config:
+    """Configuration management for the p tool."""
+    
+    def __init__(self):
+        # Default configuration
+        self.max_project_name_length = 25
+        self.max_folder_name_length = 20
+        self.min_column_width = 8
+        self.default_git_branch = 'main'
+        self.git_timeout = 5
+        self.max_scan_depth = 10
+        self.show_progress = True
+        
+        # Issue tracking configuration
+        self.issue_subfolders = ['bugs', 'issues', 'tasks', 'docs', 'design']
+        self.issue_file_patterns = ['ISSUES', 'BUGS', 'BUG', 'ISSUE']
+        self.issue_extensions = ['.md', '.txt', '']
+        
+        # TODO tracking configuration
+        self.todo_subfolders = ['tasks', 'docs', 'design']
+        self.todo_file_patterns = ['TODO']
+        self.todo_extensions = ['.txt', '.md', '']
+        
+        # Technology detection configuration
+        self.custom_tech_files = {}
+        self.custom_package_deps = {}
+        
+        # Filtering configuration
+        self.exclude_dirs = ['.git', '__pycache__', 'node_modules', '.venv', 'venv']
+        self.exclude_patterns = []
+        
+        # Load configuration files
+        self._load_config()
+    
+    def _load_config(self):
+        """Load configuration from files in order of precedence."""
+        config_files = [
+            Path.home() / '.config' / 'p' / 'config.toml',
+            Path.cwd() / '.p.toml',
+            Path.cwd() / 'p.toml'
+        ]
+        
+        for config_file in config_files:
+            if config_file.exists():
+                self._load_config_file(config_file)
+    
+    def _load_config_file(self, config_path: Path):
+        """Load configuration from a TOML file."""
+        if not tomllib:
+            return  # Skip if TOML support not available
+            
+        try:
+            with open(config_path, 'rb') as f:
+                config_data = tomllib.load(f)
+            
+            # Update configuration with loaded data
+            for key, value in config_data.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+                    
+        except Exception:
+            # Ignore config file errors to maintain robustness
+            pass
 
-# Issue tracking constants
-ISSUE_SUBFOLDERS = ['bugs', 'issues', 'tasks', 'docs', 'design']
-ISSUE_FILE_PATTERNS = ['ISSUES', 'BUGS', 'BUG', 'ISSUE']
-ISSUE_EXTENSIONS = ['.md', '.txt', '']
-
-# TODO tracking constants
-TODO_SUBFOLDERS = ['tasks', 'docs', 'design']
-TODO_FILE_PATTERNS = ['TODO']
-TODO_EXTENSIONS = ['.txt', '.md', '']
+# Global configuration instance
+config = Config()
 
 # Git branch cache to avoid repeated calls
 _git_cache = {}
@@ -50,7 +107,7 @@ def get_git_status(project_path: Union[str, Path]) -> str:
             cwd=project_path,
             capture_output=True,
             text=True,
-            timeout=GIT_TIMEOUT,
+            timeout=config.git_timeout,
             shell=False
         )
         if result.returncode == 0:
@@ -64,12 +121,12 @@ def get_git_status(project_path: Union[str, Path]) -> str:
                 # Branch info line starts with ##
                 if line.startswith('##'):
                     # Check if branch is ahead/behind
-                    if '[ahead' in line:
+                    if '[ahead' in line and 'behind' in line:
+                        status_chars.append('↕')
+                    elif '[ahead' in line:
                         status_chars.append('↑')
                     elif '[behind' in line:
                         status_chars.append('↓')
-                    elif '[ahead' in line and 'behind' in line:
-                        status_chars.append('↕')
                     continue
                 
                 # File status lines
@@ -121,11 +178,11 @@ def get_git_branch(project_path: Union[str, Path]) -> Optional[str]:
             cwd=project_path,
             capture_output=True,
             text=True,
-            timeout=GIT_TIMEOUT,
+            timeout=config.git_timeout,
             shell=False
         )
         if result.returncode == 0:
-            branch = result.stdout.strip() or DEFAULT_GIT_BRANCH
+            branch = result.stdout.strip() or config.default_git_branch
     except subprocess.TimeoutExpired:
         # Git command timed out, likely a large repo
         pass
@@ -183,6 +240,9 @@ def detect_technologies(project_path: Union[str, Path]) -> List[str]:
         'Makefile': ['Make']
     }
     
+    # Merge with custom tech files from config
+    tech_files.update(config.custom_tech_files)
+    
     for filename, techs in tech_files.items():
         if (Path(project_path) / filename).exists():
             technologies.extend(techs)
@@ -196,14 +256,21 @@ def detect_technologies(project_path: Union[str, Path]) -> List[str]:
             
             deps = {**package_data.get('dependencies', {}), **package_data.get('devDependencies', {})}
             
-            if 'react' in deps:
-                technologies.append('react')
-            if 'vue' in deps:
-                technologies.append('vue')
-            if 'angular' in deps:
-                technologies.append('angular')
-            if 'typescript' in deps:
-                technologies.append('typescript')
+            # Default package dependencies
+            package_deps = {
+                'react': 'react',
+                'vue': 'vue', 
+                'angular': 'angular',
+                'typescript': 'typescript'
+            }
+            
+            # Merge with custom package dependencies from config
+            package_deps.update(config.custom_package_deps)
+            
+            for dep_name, tech_name in package_deps.items():
+                if dep_name in deps:
+                    technologies.append(tech_name)
+                    
         except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
             # Malformed JSON or encoding issues
             pass
@@ -256,11 +323,27 @@ def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str
 
 def count_todo_lines(project_path: Union[str, Path]) -> int:
     """Count lines in files with 'TODO' in uppercase in the title."""
-    return count_lines_in_files(project_path, TODO_FILE_PATTERNS, TODO_SUBFOLDERS, TODO_EXTENSIONS)
+    return count_lines_in_files(project_path, config.todo_file_patterns, config.todo_subfolders, config.todo_extensions)
 
 def count_issue_lines(project_path: Union[str, Path]) -> int:
     """Count lines in ISSUES.md, BUGS.md and similar files."""
-    return count_lines_in_files(project_path, ISSUE_FILE_PATTERNS, ISSUE_SUBFOLDERS, ISSUE_EXTENSIONS)
+    return count_lines_in_files(project_path, config.issue_file_patterns, config.issue_subfolders, config.issue_extensions)
+
+def calculate_importance_score(project: Dict[str, Union[str, int, float, Path, List[str], None]]) -> int:
+    """Calculate importance score based on issues, git status, and TODOs."""
+    score = 0
+    
+    # Issues are highest priority (×1000)
+    score += project['issue_lines'] * 1000
+    
+    # Git status: non-clean repos need attention (+100)
+    if project['git_status'] and project['git_status'] != '✓':
+        score += 100
+    
+    # TODOs are lower priority (×10)
+    score += project['todo_lines'] * 10
+    
+    return score
 
 def get_project_info(project_path: Union[str, Path]) -> Dict[str, Union[str, int, float, Path, List[str], None]]:
     """Get comprehensive information about a project."""
@@ -291,7 +374,7 @@ def get_project_info(project_path: Union[str, Path]) -> Dict[str, Union[str, int
     except OSError:
         mod_time = create_time = 0
     
-    return {
+    project_data = {
         'folder': folder_name,
         'name': project_name,
         'branch': git_branch,
@@ -303,6 +386,11 @@ def get_project_info(project_path: Union[str, Path]) -> Dict[str, Union[str, int
         'create_time': create_time,
         'path': project_path
     }
+    
+    # Calculate importance score
+    project_data['importance_score'] = calculate_importance_score(project_data)
+    
+    return project_data
 
 def is_project_directory(path: Union[str, Path]) -> bool:
     """Determine if a directory contains a project."""
@@ -321,16 +409,31 @@ def is_project_directory(path: Union[str, Path]) -> bool:
     
     return any((path / indicator).exists() for indicator in indicators)
 
-def scan_projects(root_path: Union[str, Path]) -> List[Dict[str, Union[str, int, float, Path, List[str], None]]]:
-    """Scan for projects in the given directory."""
+def scan_projects(root_path: Union[str, Path], depth: int = 0) -> List[Dict[str, Union[str, int, float, Path, List[str], None]]]:
+    """Scan for projects in the given directory with depth limiting and filtering."""
     root_path = Path(root_path)
     projects = []
     
+    # Check depth limit
+    if depth > config.max_scan_depth:
+        return projects
+    
     try:
         for item in root_path.iterdir():
-            if item.is_dir() and not item.name.startswith('.'):
+            # Skip hidden directories and excluded directories
+            if item.name.startswith('.') or item.name in config.exclude_dirs:
+                continue
+                
+            # Skip if matches exclude patterns
+            if any(pattern in item.name for pattern in config.exclude_patterns):
+                continue
+                
+            if item.is_dir():
                 if is_project_directory(item):
                     projects.append(get_project_info(item))
+                else:
+                    # Recursively scan subdirectories if not a project
+                    projects.extend(scan_projects(item, depth + 1))
     except PermissionError:
         print(f"Permission denied accessing {root_path}", file=sys.stderr)
     
@@ -345,13 +448,13 @@ def calculate_column_widths(projects):
     widths = [len("Name"), len("Folder"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
     
     for project in projects:
-        # Project name - cap at MAX_PROJECT_NAME_LENGTH characters
+        # Project name - cap at configured length
         project_name = project['name']
-        widths[0] = max(widths[0], min(len(project_name), MAX_PROJECT_NAME_LENGTH))
+        widths[0] = max(widths[0], min(len(project_name), config.max_project_name_length))
         
-        # Folder name - cap at MAX_FOLDER_NAME_LENGTH characters
+        # Folder name - cap at configured length
         folder_name = project['folder']
-        widths[1] = max(widths[1], min(len(folder_name), MAX_FOLDER_NAME_LENGTH))
+        widths[1] = max(widths[1], min(len(folder_name), config.max_folder_name_length))
         
         # Branch
         branch_text = project['branch'] or ""
@@ -374,8 +477,8 @@ def calculate_column_widths(projects):
         widths[6] = max(widths[6], len(issue_text))
     
     # Enforce maximum widths
-    widths[0] = min(widths[0], MAX_PROJECT_NAME_LENGTH)
-    widths[1] = min(widths[1], MAX_FOLDER_NAME_LENGTH)
+    widths[0] = min(widths[0], config.max_project_name_length)
+    widths[1] = min(widths[1], config.max_folder_name_length)
     
     # Calculate table overhead (borders and padding)
     table_overhead = len(widths) * 3 + 1  # │ col │ col │ etc
@@ -385,10 +488,10 @@ def calculate_column_widths(projects):
     total_width = sum(widths)
     if total_width > available_width:
         ratio = available_width / total_width
-        widths = [max(MIN_COLUMN_WIDTH, int(w * ratio)) for w in widths]
+        widths = [max(config.min_column_width, int(w * ratio)) for w in widths]
         # Re-enforce maximums after proportional reduction
-        widths[0] = min(widths[0], MAX_PROJECT_NAME_LENGTH)
-        widths[1] = min(widths[1], MAX_FOLDER_NAME_LENGTH)
+        widths[0] = min(widths[0], config.max_project_name_length)
+        widths[1] = min(widths[1], config.max_folder_name_length)
     
     return widths
 
@@ -457,11 +560,22 @@ def format_table_header(widths):
 def main():
     parser = argparse.ArgumentParser(description='Summarize projects in a directory')
     parser.add_argument('folder', nargs='?', default='.', help='Directory to scan (default: current directory)')
-    parser.add_argument('-s', '--sort', choices=['alpha', 'modified', 'created'], 
-                       default='modified', help='Sort projects by alpha, modified, or created date')
+    parser.add_argument('-s', '--sort', choices=['alpha', 'modified', 'created', 'importance'], 
+                       default='importance', help='Sort projects by alpha, modified, created date, or importance (issues, git status, TODOs)')
+    parser.add_argument('-j', '--json', action='store_true', help='Output results as JSON')
+    parser.add_argument('--no-progress', action='store_true', help='Disable progress indicators')
+    parser.add_argument('--exclude', action='append', help='Additional directories to exclude (can be used multiple times)')
     parser.add_argument('-v', '--version', action='version', version=f'p {VERSION}')
     
     args = parser.parse_args()
+    
+    # Apply command line exclusions to config
+    if args.exclude:
+        config.exclude_dirs.extend(args.exclude)
+    
+    # Override progress setting if specified
+    if args.no_progress:
+        config.show_progress = False
     
     # Resolve path
     scan_path = Path(args.folder).resolve()
@@ -474,11 +588,17 @@ def main():
         print(f"Error: '{args.folder}' is not a directory", file=sys.stderr)
         sys.exit(1)
     
-    # Scan for projects
+    # Scan for projects with progress indication
+    if config.show_progress and not args.json:
+        print(f"Scanning {scan_path}...", file=sys.stderr)
+    
     projects = scan_projects(scan_path)
     
     if not projects:
-        print(f"No projects found in {scan_path}")
+        if args.json:
+            print(json.dumps({"projects": [], "scan_path": str(scan_path)}))
+        else:
+            print(f"No projects found in {scan_path}")
         return
     
     # Sort projects
@@ -486,25 +606,42 @@ def main():
         projects.sort(key=lambda p: p['folder'].lower())
     elif args.sort == 'created':
         projects.sort(key=lambda p: p['create_time'], reverse=True)
-    else:  # modified (default)
+    elif args.sort == 'modified':
         projects.sort(key=lambda p: p['mod_time'], reverse=True)
+    else:  # importance (default)
+        projects.sort(key=lambda p: p['importance_score'], reverse=True)
     
     # Output results
-    print(f"Projects in {scan_path}")
-    print()
-    
-    # Calculate column widths
-    widths = calculate_column_widths(projects)
-    
-    # Print table
-    print(format_table_separator(widths, top=True))
-    print(format_table_header(widths))
-    print(format_table_separator(widths))
-    
-    for project in projects:
-        print(format_table_row(project, widths))
-    
-    print(format_table_separator(widths, bottom=True))
+    if args.json:
+        # Convert Path objects to strings for JSON serialization
+        json_projects = []
+        for project in projects:
+            json_project = project.copy()
+            json_project['path'] = str(json_project['path'])
+            json_projects.append(json_project)
+        
+        output = {
+            "projects": json_projects,
+            "scan_path": str(scan_path),
+            "sort_method": args.sort,
+            "total_projects": len(projects)
+        }
+        print(json.dumps(output, indent=2))
+    else:
+        print()
+        
+        # Calculate column widths
+        widths = calculate_column_widths(projects)
+        
+        # Print table
+        print(format_table_separator(widths, top=True))
+        print(format_table_header(widths))
+        print(format_table_separator(widths))
+        
+        for project in projects:
+            print(format_table_row(project, widths))
+        
+        print(format_table_separator(widths, bottom=True))
 
 if __name__ == '__main__':
     main()
