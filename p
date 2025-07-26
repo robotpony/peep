@@ -342,7 +342,7 @@ def calculate_column_widths(projects):
     terminal_width = shutil.get_terminal_size().columns
     
     # Minimum widths for headers
-    widths = [len("Project"), len("Path"), len("Branch"), len("Git"), len("Tech"), len("TODOs"), len("Issues")]
+    widths = [len("Name"), len("Folder"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
     
     for project in projects:
         # Project name - cap at MAX_PROJECT_NAME_LENGTH characters
@@ -357,17 +357,21 @@ def calculate_column_widths(projects):
         branch_text = project['branch'] or ""
         widths[2] = max(widths[2], len(branch_text))
         
+        # Git status - keep it minimal (4 characters should be enough)
+        status_text = project['git_status'] or ""
+        widths[3] = max(widths[3], min(len(status_text), 4))
+        
         # Technologies
         tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
-        widths[3] = max(widths[3], len(tech_text))
+        widths[4] = max(widths[4], len(tech_text))
         
         # TODOs
         todo_text = str(project['todo_lines'])
-        widths[4] = max(widths[4], len(todo_text))
+        widths[5] = max(widths[5], len(todo_text))
         
         # Issues
         issue_text = str(project['issue_lines'])
-        widths[5] = max(widths[5], len(issue_text))
+        widths[6] = max(widths[6], len(issue_text))
     
     # Enforce maximum widths
     widths[0] = min(widths[0], MAX_PROJECT_NAME_LENGTH)
