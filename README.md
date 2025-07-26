@@ -13,11 +13,10 @@ Projects in /Users/mx/projects
 ┌──────────────────────┬─────────────────┬────────┬──────────────────────────────┬───────┐
 │ Name                 │ Folder          │ Branch │ Technologies                 │ TODOs │
 ├──────────────────────┼─────────────────┼────────┼──────────────────────────────┼───────┤
-│ Peep at a project    │ peep            │ main   │                              │ 5     │
+│ (p)eep at a folder … │ peep            │ main   │                              │ 5     │
 │ w42                  │ w42             │ main   │                              │ 0     │
 │ oview - ollama visu… │ oview           │ main   │ Python                       │ 0     │
 │ Thwarter Interactiv… │ thwarter        │ main   │ Rust                         │ 297   │
-│ ⌥⌘ SPACE COMMAND, T… │ spacecommand.c… │ main   │                              │ 0     │
 │ SpaceCommand         │ spacecommand.ca │ main   │ JS, node.js, npm, react      │ 116   │
 │ Robotpony Render     │ robotpony-rend… │ main   │ JS, node.js, npm, typescript │ 0     │
 │ statsim              │ statsim         │ main   │ JS, node.js, npm, typescript │ 245   │
