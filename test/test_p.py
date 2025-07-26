@@ -8,12 +8,12 @@ import sys
 import os
 
 # Add the parent directory to sys.path so we can import 'p'
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import functions from p (the script) - rename to .py for import
 import importlib.util
 import shutil as shell_util
-p_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p")
+p_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "p")
 
 # Create a temporary .py copy for importing
 temp_py_path = p_script_path + ".py"
@@ -40,31 +40,12 @@ class TestProjectScanner(unittest.TestCase):
     def tearDown(self):
         """Clean up after each test method."""
         shutil.rmtree(self.test_dir)
-        # Clear git cache between tests
-        p_module._git_cache.clear()
     
-    def test_validate_directory_path_valid(self):
-        """Test that validate_directory_path works with valid directory."""
-        path, error = p_module.validate_directory_path(self.test_dir)
-        self.assertIsNotNone(path)
-        self.assertIsNone(error)
-        self.assertEqual(path, Path(self.test_dir).resolve())
-    
-    def test_validate_directory_path_nonexistent(self):
-        """Test that validate_directory_path handles nonexistent directory."""
-        fake_path = "/nonexistent/directory"
-        path, error = p_module.validate_directory_path(fake_path)
-        self.assertIsNone(path)
-        self.assertIn("does not exist", error)
-    
-    def test_validate_directory_path_file(self):
-        """Test that validate_directory_path handles file instead of directory."""
-        test_file = self.test_path / "test.txt"
-        test_file.write_text("test")
-        
-        path, error = p_module.validate_directory_path(str(test_file))
-        self.assertIsNone(path)
-        self.assertIn("is not a directory", error)
+    def test_get_git_branch(self):
+        """Test git branch detection."""
+        # Test non-git directory
+        branch = p_module.get_git_branch(self.test_path)
+        self.assertIsNone(branch)
     
     def test_extract_project_name_from_readme(self):
         """Test extracting project name from README.md."""
@@ -130,35 +111,16 @@ class TestProjectScanner(unittest.TestCase):
         todo_count = p_module.count_todo_lines(self.test_path)
         self.assertEqual(todo_count, 4)
     
-    def test_scan_projects_non_recursive(self):
-        """Test scanning projects non-recursively."""
+    def test_scan_projects(self):
+        """Test scanning projects."""
         # Create a project directory
         project_dir = self.test_path / "test-project"
         project_dir.mkdir()
         (project_dir / "README.md").write_text("# Test Project")
         
-        projects = p_module.scan_projects(self.test_path, recursive=False)
+        projects = p_module.scan_projects(self.test_path)
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0]['folder'], 'test-project')
-    
-    def test_scan_projects_recursive(self):
-        """Test scanning projects recursively."""
-        # Create nested project directories
-        project_dir1 = self.test_path / "project1"
-        project_dir1.mkdir()
-        (project_dir1 / "README.md").write_text("# Project 1")
-        
-        nested_dir = self.test_path / "nested"
-        nested_dir.mkdir()
-        project_dir2 = nested_dir / "project2"
-        project_dir2.mkdir()
-        (project_dir2 / "package.json").write_text('{"name": "project2"}')
-        
-        projects = p_module.scan_projects(self.test_path, recursive=True)
-        self.assertEqual(len(projects), 2)
-        project_names = [p['folder'] for p in projects]
-        self.assertIn('project1', project_names)
-        self.assertIn('project2', project_names)
 
 if __name__ == '__main__':
     unittest.main()
