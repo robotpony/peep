@@ -197,6 +197,75 @@ def get_git_branch(project_path: Union[str, Path]) -> Optional[str]:
     _git_cache[project_path_str] = branch
     return branch
 
+def _has_python_files(project_path: Path) -> bool:
+    """Check if the project contains Python files."""
+    try:
+        # Check for .py files in common directories
+        python_dirs = ['.', 'src', 'lib', 'tests', 'test', 'scripts', 'bin']
+        
+        for dir_name in python_dirs:
+            dir_path = project_path / dir_name
+            if dir_path.exists() and dir_path.is_dir():
+                # Look for .py files in this directory
+                for item in dir_path.iterdir():
+                    if item.is_file() and item.suffix == '.py':
+                        return True
+                        
+        # Also check root directory for .py files
+        for item in project_path.iterdir():
+            if item.is_file() and item.suffix == '.py':
+                return True
+                
+    except (PermissionError, OSError):
+        pass
+    return False
+
+def _has_python_executables(project_path: Path) -> bool:
+    """Check if the project contains executable files with Python shebangs."""
+    try:
+        # Check common executable locations
+        exec_dirs = ['.', 'bin', 'scripts']
+        
+        for dir_name in exec_dirs:
+            dir_path = project_path / dir_name
+            if dir_path.exists() and dir_path.is_dir():
+                for item in dir_path.iterdir():
+                    if item.is_file() and _is_python_executable(item):
+                        return True
+                        
+        # Check root directory for executables
+        for item in project_path.iterdir():
+            if item.is_file() and _is_python_executable(item):
+                return True
+                
+    except (PermissionError, OSError):
+        pass
+    return False
+
+def _is_python_executable(file_path: Path) -> bool:
+    """Check if a file is a Python executable by examining its shebang."""
+    try:
+        # Check if file is executable
+        if not file_path.stat().st_mode & 0o111:
+            return False
+            
+        # Read first line to check for Python shebang
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            first_line = f.readline().strip()
+            
+        python_shebangs = [
+            '#!/usr/bin/env python',
+            '#!/usr/bin/python',
+            '#!/usr/local/bin/python',
+            '#!python'
+        ]
+        
+        return any(first_line.startswith(shebang) for shebang in python_shebangs)
+        
+    except (PermissionError, UnicodeDecodeError, OSError):
+        pass
+    return False
+
 def extract_project_name(readme_path: Union[str, Path]) -> Optional[str]:
     """Extract project name from README.md file."""
     try:
@@ -216,9 +285,10 @@ def extract_project_name(readme_path: Union[str, Path]) -> Optional[str]:
         pass
     return None
 
-def detect_technologies(project_path: Union[str, Path]) -> List[str]:
+def detect_technologies(project_path: Union[str, Path], debug_info: List[Dict] = None) -> List[str]:
     """Detect technologies used in the project."""
     technologies = []
+    project_path = Path(project_path)
     
     # Check for common project files
     tech_files = {
@@ -226,6 +296,11 @@ def detect_technologies(project_path: Union[str, Path]) -> List[str]:
         'requirements.txt': ['Python'],
         'Pipfile': ['Python'],
         'pyproject.toml': ['Python'],
+        'setup.py': ['Python'],
+        'setup.cfg': ['Python'],
+        'tox.ini': ['Python'],
+        'pytest.ini': ['Python'],
+        '.python-version': ['Python'],
         'Cargo.toml': ['Rust'],
         'go.mod': ['Go'],
         'pom.xml': ['Java', 'Maven'],
@@ -237,15 +312,48 @@ def detect_technologies(project_path: Union[str, Path]) -> List[str]:
         'Dockerfile': ['Docker'],
         'docker-compose.yml': ['Docker'],
         'docker-compose.yaml': ['Docker'],
-        'Makefile': ['Make']
+        'Makefile': ['Make'],
+        'config.toml': ['Hugo'],
+        'config.yaml': ['Hugo'],
+        'config.yml': ['Hugo'],
+        'hugo.toml': ['Hugo'],
+        'hugo.yaml': ['Hugo'],
+        'hugo.yml': ['Hugo']
     }
     
     # Merge with custom tech files from config
     tech_files.update(config.custom_tech_files)
     
     for filename, techs in tech_files.items():
-        if (Path(project_path) / filename).exists():
+        if (project_path / filename).exists():
             technologies.extend(techs)
+            if debug_info is not None:
+                debug_info.append({
+                    'source': filename,
+                    'type': 'file',
+                    'technologies': techs
+                })
+    
+    # Enhanced Python detection
+    if not any('Python' in tech for tech in technologies):
+        # Check for .py files
+        if _has_python_files(project_path):
+            technologies.append('Python')
+            if debug_info is not None:
+                debug_info.append({
+                    'source': '*.py files',
+                    'type': 'pattern',
+                    'technologies': ['Python']
+                })
+        # Check for executable files with Python shebang
+        elif _has_python_executables(project_path):
+            technologies.append('Python')
+            if debug_info is not None:
+                debug_info.append({
+                    'source': 'Python executables',
+                    'type': 'pattern',
+                    'technologies': ['Python']
+                })
     
     # Check package.json for React/Vue/etc
     package_json_path = Path(project_path) / 'package.json'
@@ -270,6 +378,12 @@ def detect_technologies(project_path: Union[str, Path]) -> List[str]:
             for dep_name, tech_name in package_deps.items():
                 if dep_name in deps:
                     technologies.append(tech_name)
+                    if debug_info is not None:
+                        debug_info.append({
+                            'source': f'package.json dependency: {dep_name}',
+                            'type': 'dependency',
+                            'technologies': [tech_name]
+                        })
                     
         except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
             # Malformed JSON or encoding issues
@@ -280,11 +394,87 @@ def detect_technologies(project_path: Union[str, Path]) -> List[str]:
     if index_html_path.exists() and not technologies:
         # Only add "static website" if no other technologies detected
         technologies.append('static website')
+        if debug_info is not None:
+            debug_info.append({
+                'source': 'index.html',
+                'type': 'file',
+                'technologies': ['static website']
+            })
+    
+    # If no technologies detected but this is a valid project directory, mark as n/a
+    if not technologies and _is_empty_or_planning_project(project_path):
+        technologies.append('n/a')
+        if debug_info is not None:
+            debug_info.append({
+                'source': 'empty/planning project',
+                'type': 'inference',
+                'technologies': ['n/a']
+            })
     
     return list(dict.fromkeys(technologies))  # Remove duplicates while preserving order
 
+def _is_empty_or_planning_project(project_path: Path) -> bool:
+    """Check if this appears to be a new/empty project or planning stage project."""
+    try:
+        # Check if it has basic project structure but no code yet
+        has_readme = (project_path / 'README.md').exists() or (project_path / 'readme.md').exists()
+        has_git = (project_path / '.git').exists()
+        
+        # If it has README or git but no detectable technology, it's likely a new project
+        if has_readme or has_git:
+            # Make sure it doesn't have any actual code files
+            if not _has_any_code_files(project_path):
+                return True
+                
+        # Check for common planning/documentation-only indicators
+        planning_files = [
+            'TODO.md', 'todo.md', 'TODOS.md',
+            'PLANNING.md', 'planning.md',
+            'DESIGN.md', 'design.md',
+            'NOTES.md', 'notes.md',
+            'IDEAS.md', 'ideas.md',
+            'ROADMAP.md', 'roadmap.md',
+            'SPEC.md', 'spec.md'
+        ]
+        
+        has_planning_files = any((project_path / filename).exists() for filename in planning_files)
+        
+        # If it has planning files but no code, it's in planning stage
+        if has_planning_files and not _has_any_code_files(project_path):
+            return True
+            
+    except (PermissionError, OSError):
+        pass
+        
+    return False
+
+def _has_any_code_files(project_path: Path) -> bool:
+    """Check if directory contains any code files."""
+    try:
+        # Common code file extensions
+        code_extensions = {
+            '.py', '.js', '.ts', '.jsx', '.tsx', '.rs', '.go', '.java', '.cpp', '.c', 
+            '.php', '.rb', '.swift', '.kt', '.scala', '.clj', '.cs', '.fs', '.vb',
+            '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd'
+        }
+        
+        # Common directories to check
+        dirs_to_check = ['.', 'src', 'lib', 'app', 'scripts', 'bin', 'test', 'tests']
+        
+        for dir_name in dirs_to_check:
+            dir_path = project_path / dir_name
+            if dir_path.exists() and dir_path.is_dir():
+                for item in dir_path.iterdir():
+                    if item.is_file() and item.suffix.lower() in code_extensions:
+                        return True
+                        
+    except (PermissionError, OSError):
+        pass
+        
+    return False
+
 def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str], 
-                        subfolders: List[str], extensions: List[str]) -> int:
+                        subfolders: List[str], extensions: List[str], debug_info: List[Dict] = None) -> int:
     """Count lines in files matching given patterns."""
     project_path = Path(project_path)
     total_lines = 0
@@ -303,7 +493,14 @@ def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str
                            ('.' not in name and '' in extensions):
                             try:
                                 with open(item, 'r', encoding='utf-8', errors='ignore') as f:
-                                    lines += sum(1 for _ in f)
+                                    file_lines = sum(1 for _ in f)
+                                    lines += file_lines
+                                    if debug_info is not None:
+                                        relative_path = item.relative_to(project_path)
+                                        debug_info.append({
+                                            'file': str(relative_path),
+                                            'lines': file_lines
+                                        })
                             except (PermissionError, UnicodeDecodeError):
                                 pass
         except PermissionError:
@@ -321,13 +518,13 @@ def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str
     
     return total_lines
 
-def count_todo_lines(project_path: Union[str, Path]) -> int:
+def count_todo_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
     """Count lines in files with 'TODO' in uppercase in the title."""
-    return count_lines_in_files(project_path, config.todo_file_patterns, config.todo_subfolders, config.todo_extensions)
+    return count_lines_in_files(project_path, config.todo_file_patterns, config.todo_subfolders, config.todo_extensions, debug_info)
 
-def count_issue_lines(project_path: Union[str, Path]) -> int:
+def count_issue_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
     """Count lines in ISSUES.md, BUGS.md and similar files."""
-    return count_lines_in_files(project_path, config.issue_file_patterns, config.issue_subfolders, config.issue_extensions)
+    return count_lines_in_files(project_path, config.issue_file_patterns, config.issue_subfolders, config.issue_extensions, debug_info)
 
 def calculate_importance_score(project: Dict[str, Union[str, int, float, Path, List[str], None]]) -> int:
     """Calculate importance score based on issues, git status, and TODOs."""
@@ -345,7 +542,7 @@ def calculate_importance_score(project: Dict[str, Union[str, int, float, Path, L
     
     return score
 
-def get_project_info(project_path: Union[str, Path]) -> Dict[str, Union[str, int, float, Path, List[str], None]]:
+def get_project_info(project_path: Union[str, Path], collect_debug: bool = False) -> Dict[str, Union[str, int, float, Path, List[str], None]]:
     """Get comprehensive information about a project."""
     project_path = Path(project_path)
     folder_name = project_path.name
@@ -358,14 +555,19 @@ def get_project_info(project_path: Union[str, Path]) -> Dict[str, Union[str, int
     git_branch = get_git_branch(project_path)
     git_status = get_git_status(project_path)
     
+    # Initialize debug info collections
+    tech_debug = [] if collect_debug else None
+    todo_debug = [] if collect_debug else None
+    issue_debug = [] if collect_debug else None
+    
     # Detect technologies
-    technologies = detect_technologies(project_path)
+    technologies = detect_technologies(project_path, tech_debug)
     
     # Count TODO lines
-    todo_lines = count_todo_lines(project_path)
+    todo_lines = count_todo_lines(project_path, todo_debug)
     
     # Count issue lines
-    issue_lines = count_issue_lines(project_path)
+    issue_lines = count_issue_lines(project_path, issue_debug)
     
     # Get modification times
     try:
@@ -387,6 +589,14 @@ def get_project_info(project_path: Union[str, Path]) -> Dict[str, Union[str, int
         'path': project_path
     }
     
+    # Add debug information if requested
+    if collect_debug:
+        project_data['debug'] = {
+            'technologies': tech_debug,
+            'todos': todo_debug,
+            'issues': issue_debug
+        }
+    
     # Calculate importance score
     project_data['importance_score'] = calculate_importance_score(project_data)
     
@@ -400,16 +610,54 @@ def is_project_directory(path: Union[str, Path]) -> bool:
     indicators = [
         'README.md', 'readme.md',
         'package.json',
-        'requirements.txt', 'Pipfile',
+        'requirements.txt', 'Pipfile', 'pyproject.toml', 'setup.py', 'setup.cfg',
         'Cargo.toml',
         'go.mod',
         'pom.xml', 'build.gradle',
-        '.git'
+        '.git',
+        # Planning/documentation indicators
+        'TODO.md', 'TODOS.md', 'PLANNING.md', 'DESIGN.md'
     ]
     
-    return any((path / indicator).exists() for indicator in indicators)
+    # First check for explicit project indicators
+    if any((path / indicator).exists() for indicator in indicators):
+        return True
+    
+    # Fallback: check if directory contains significant code files
+    return _has_significant_code_files(path)
 
-def scan_projects(root_path: Union[str, Path], depth: int = 0) -> List[Dict[str, Union[str, int, float, Path, List[str], None]]]:
+def _has_significant_code_files(path: Path) -> bool:
+    """Check if directory contains significant code files that indicate a project."""
+    try:
+        # Check for Python files
+        if _has_python_files(path):
+            return True
+            
+        # Check for Python executables with shebangs
+        if _has_python_executables(path):
+            return True
+            
+        # Check for other common code file extensions
+        code_extensions = {'.js', '.ts', '.jsx', '.tsx', '.rs', '.go', '.java', '.cpp', '.c', '.php', '.rb'}
+        
+        for item in path.iterdir():
+            if item.is_file() and item.suffix in code_extensions:
+                return True
+                
+        # Check in common code directories
+        for subdir_name in ['src', 'lib', 'app']:
+            subdir = path / subdir_name
+            if subdir.exists() and subdir.is_dir():
+                for item in subdir.iterdir():
+                    if item.is_file() and item.suffix in code_extensions:
+                        return True
+                        
+    except (PermissionError, OSError):
+        pass
+        
+    return False
+
+def scan_projects(root_path: Union[str, Path], depth: int = 0, collect_debug: bool = False) -> List[Dict[str, Union[str, int, float, Path, List[str], None]]]:
     """Scan for projects in the given directory with depth limiting and filtering."""
     root_path = Path(root_path)
     projects = []
@@ -430,10 +678,10 @@ def scan_projects(root_path: Union[str, Path], depth: int = 0) -> List[Dict[str,
                 
             if item.is_dir():
                 if is_project_directory(item):
-                    projects.append(get_project_info(item))
+                    projects.append(get_project_info(item, collect_debug))
                 else:
                     # Recursively scan subdirectories if not a project
-                    projects.extend(scan_projects(item, depth + 1))
+                    projects.extend(scan_projects(item, depth + 1, collect_debug))
     except PermissionError:
         print(f"Permission denied accessing {root_path}", file=sys.stderr)
     
@@ -557,12 +805,63 @@ def format_table_header(widths):
     formatted_headers = [f" {header:<{width}} " for header, width in zip(headers, widths)]
     return "│" + "│".join(formatted_headers) + "│"
 
+def format_debug_info(projects):
+    """Format debug information for verbose output."""
+    output = []
+    
+    for project in projects:
+        debug_data = project.get('debug')
+        if not debug_data:
+            continue
+            
+        has_debug_info = (
+            debug_data.get('technologies') or 
+            debug_data.get('todos') or 
+            debug_data.get('issues')
+        )
+        
+        if not has_debug_info:
+            continue
+            
+        output.append(f"\n## Debug Information for {project['name']} ({project['folder']})")
+        
+        # Technology sources
+        if debug_data.get('technologies'):
+            output.append("### Technology Detection Sources:")
+            for tech_info in debug_data['technologies']:
+                technologies_str = ', '.join(tech_info['technologies'])
+                if tech_info['type'] == 'file':
+                    output.append(f"  • {tech_info['source']} → {technologies_str}")
+                elif tech_info['type'] == 'dependency':
+                    output.append(f"  • {tech_info['source']} → {technologies_str}")
+                elif tech_info['type'] == 'pattern':
+                    output.append(f"  • {tech_info['source']} → {technologies_str}")
+                elif tech_info['type'] == 'inference':
+                    output.append(f"  • {tech_info['source']} → {technologies_str}")
+        
+        # TODO sources
+        if debug_data.get('todos'):
+            output.append("### TODO File Sources:")
+            for todo_info in debug_data['todos']:
+                output.append(f"  • {todo_info['file']} ({todo_info['lines']} lines)")
+        
+        # Issue sources
+        if debug_data.get('issues'):
+            output.append("### Issue File Sources:")
+            for issue_info in debug_data['issues']:
+                output.append(f"  • {issue_info['file']} ({issue_info['lines']} lines)")
+        
+        output.append("")  # Add blank line between projects
+    
+    return '\n'.join(output)
+
 def main():
     parser = argparse.ArgumentParser(description='Summarize projects in a directory')
     parser.add_argument('folder', nargs='?', default='.', help='Directory to scan (default: current directory)')
     parser.add_argument('-s', '--sort', choices=['alpha', 'modified', 'created', 'importance'], 
                        default='importance', help='Sort projects by alpha, modified, created date, or importance (issues, git status, TODOs)')
     parser.add_argument('-j', '--json', action='store_true', help='Output results as JSON')
+    parser.add_argument('-V', '--verbose', action='store_true', help='Show debug information about sources of TODOs, issues, and technologies')
     parser.add_argument('--no-progress', action='store_true', help='Disable progress indicators')
     parser.add_argument('--exclude', action='append', help='Additional directories to exclude (can be used multiple times)')
     parser.add_argument('-v', '--version', action='version', version=f'p {VERSION}')
@@ -592,7 +891,7 @@ def main():
     if config.show_progress and not args.json:
         print(f"Scanning {scan_path}...", file=sys.stderr)
     
-    projects = scan_projects(scan_path)
+    projects = scan_projects(scan_path, collect_debug=args.verbose)
     
     if not projects:
         if args.json:
@@ -642,6 +941,12 @@ def main():
             print(format_table_row(project, widths))
         
         print(format_table_separator(widths, bottom=True))
+        
+        # Show debug information if verbose mode is enabled
+        if args.verbose:
+            debug_output = format_debug_info(projects)
+            if debug_output.strip():
+                print(debug_output)
 
 if __name__ == '__main__':
     main()

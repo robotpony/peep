@@ -1,7 +1,28 @@
-# (p)eep at a folder of repositories
+# (p)eep 
 
-This is a quick script that dumps a summary of projects in specified folders (or from the CWD). It answers 
+Display a summary of projects in specified folders (or from the CWD). It answers 
 the question, "where are these projects at," more or less.
+
+### Sample Output
+
+```
+➜ ./p ..
+Scanning /Users/mx/projects...
+
+┌───────────────────────────┬──────────────────────┬────────┬─────┬──────────────────────────────┬───────┬────────┐
+│ Name                      │ Folder               │ Branch │ Git │ Technologies                 │ TODOs │ Issues │
+├───────────────────────────┼──────────────────────┼────────┼─────┼──────────────────────────────┼───────┼────────┤
+│ Thwarter Interactive Fic… │ thwarter             │ main   │ ✓   │ Rust                         │ 297   │ 167    │
+│ oview - ollama visualizer │ oview                │ main   │ ?   │ Python                       │ 0     │ 148    │
+│ SpaceCommand              │ spacecommand.ca      │ main   │ M?  │ JS, node.js, npm, react      │ 116   │ 45     │
+│ statsim                   │ statsim              │ main   │ M   │ JS, node.js, npm, typescript │ 245   │ 0      │
+│ (p)eep at a folder of re… │ peep                 │ main   │ M?  │                              │ 5     │ 0      │
+│ SPACE COMMAND, THE FRICK… │ spacecommand.ca.pla… │ main   │ ?   │                              │ 0     │ 0      │
+│ Robotpony Render          │ robotpony-render     │ main   │ ↑?  │ JS, node.js, npm, typescript │ 0     │ 0      │
+│ w42                       │ w42                  │ main   │ M   │                              │ 0     │ 0      │
+│ brucealderson.ca.2025     │ brucealderson.ca.20… │ main   │ ✓   │ static website               │ 0     │ 0      │
+└───────────────────────────┴──────────────────────┴────────┴─────┴──────────────────────────────┴───────┴────────┘
+```
 
 ## Features
 
@@ -40,26 +61,7 @@ the question, "where are these projects at," more or less.
 ./p --no-progress
 ```
 
-### Sample Output
 
-```
-➜ ./p ..
-Scanning /Users/mx/projects...
-
-┌───────────────────────────┬──────────────────────┬────────┬─────┬──────────────────────────────┬───────┬────────┐
-│ Name                      │ Folder               │ Branch │ Git │ Technologies                 │ TODOs │ Issues │
-├───────────────────────────┼──────────────────────┼────────┼─────┼──────────────────────────────┼───────┼────────┤
-│ Thwarter Interactive Fic… │ thwarter             │ main   │ ✓   │ Rust                         │ 297   │ 167    │
-│ oview - ollama visualizer │ oview                │ main   │ ?   │ Python                       │ 0     │ 148    │
-│ SpaceCommand              │ spacecommand.ca      │ main   │ M?  │ JS, node.js, npm, react      │ 116   │ 45     │
-│ statsim                   │ statsim              │ main   │ M   │ JS, node.js, npm, typescript │ 245   │ 0      │
-│ (p)eep at a folder of re… │ peep                 │ main   │ M?  │                              │ 5     │ 0      │
-│ SPACE COMMAND, THE FRICK… │ spacecommand.ca.pla… │ main   │ ?   │                              │ 0     │ 0      │
-│ Robotpony Render          │ robotpony-render     │ main   │ ↑?  │ JS, node.js, npm, typescript │ 0     │ 0      │
-│ w42                       │ w42                  │ main   │ M   │                              │ 0     │ 0      │
-│ brucealderson.ca.2025     │ brucealderson.ca.20… │ main   │ ✓   │ static website               │ 0     │ 0      │
-└───────────────────────────┴──────────────────────┴────────┴─────┴──────────────────────────────┴───────┴────────┘
-```
 
 ## Configuration
 
@@ -109,9 +111,25 @@ exclude_patterns = ["temp", "backup"]
 ## Technology Detection
 
 Automatically detects technologies from:
-- **Files**: package.json, requirements.txt, Cargo.toml, go.mod, etc.
+- **Project Files**: package.json, requirements.txt, Cargo.toml, go.mod, etc.
+- **Source Code**: .py, .js, .rs, .go files in project directories
+- **Executables**: Python scripts with shebangs (#!/usr/bin/env python3)
 - **Dependencies**: React, Vue, Angular, TypeScript from package.json
 - **Custom**: Add your own via configuration
+
+### Enhanced Python Detection
+Python projects are detected through multiple methods:
+- **Traditional files**: requirements.txt, setup.py, pyproject.toml, Pipfile, etc.
+- **Source files**: .py files in root, src/, lib/, tests/, scripts/ directories
+- **Executables**: Scripts with Python shebangs (even without .py extension)
+- **Test files**: Python test files in test/ or tests/ directories
+
+### Early-Stage Project Detection
+Projects in planning or initial stages are marked as `n/a`:
+- **README-only**: Projects with README.md but no source code yet
+- **Git repositories**: Empty git repos waiting for first commit
+- **Planning stage**: Projects with TODO.md, PLANNING.md, DESIGN.md but no code
+- **Documentation-only**: Projects with specs, notes, or roadmaps but no implementation
 
 Supports: JavaScript, Python, Rust, Go, Java, PHP, Ruby, Docker, and many more.
 

@@ -64,6 +64,31 @@ class TestProjectScanner(unittest.TestCase):
         technologies = p_module.detect_technologies(self.test_path)
         self.assertIn("Python", technologies)
     
+    def test_detect_python_by_py_files(self):
+        """Test Python detection by .py files."""
+        (self.test_path / "main.py").write_text("print('hello world')")
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertIn("Python", technologies)
+    
+    def test_detect_python_by_test_files(self):
+        """Test Python detection by test directory .py files."""
+        test_dir = self.test_path / "test"
+        test_dir.mkdir()
+        (test_dir / "test_main.py").write_text("import unittest")
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertIn("Python", technologies)
+    
+    def test_detect_python_by_shebang(self):
+        """Test Python detection by shebang in executable."""
+        script_path = self.test_path / "script"
+        script_path.write_text("#!/usr/bin/env python3\nprint('hello')")
+        script_path.chmod(0o755)  # Make executable
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertIn("Python", technologies)
+    
     def test_detect_technologies_javascript(self):
         """Test technology detection for JavaScript projects."""
         (self.test_path / "package.json").write_text('{"name": "test", "dependencies": {"react": "^18.0.0"}}')
@@ -177,6 +202,39 @@ class TestProjectScanner(unittest.TestCase):
         
         self.assertIn("Normal Project", project_names)
         self.assertNotIn("Should be excluded", project_names)
+    
+    def test_na_technology_detection_readme_only(self):
+        """Test n/a technology detection for README-only projects."""
+        (self.test_path / "README.md").write_text("# New Project\n\nComing soon...")
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertIn("n/a", technologies)
+    
+    def test_na_technology_detection_git_only(self):
+        """Test n/a technology detection for git repos without code."""
+        git_dir = self.test_path / ".git"
+        git_dir.mkdir()
+        (git_dir / "config").write_text("[core]\n    repositoryformatversion = 0")
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertIn("n/a", technologies)
+    
+    def test_na_technology_detection_planning_files(self):
+        """Test n/a technology detection for projects with planning files."""
+        (self.test_path / "TODO.md").write_text("# TODO\n\n- Plan the project\n- Write code")
+        (self.test_path / "DESIGN.md").write_text("# Design\n\nArchitecture notes...")
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertIn("n/a", technologies)
+    
+    def test_no_na_when_code_exists(self):
+        """Test that n/a is not added when actual code exists."""
+        (self.test_path / "README.md").write_text("# Project")
+        (self.test_path / "main.py").write_text("print('hello')")
+        
+        technologies = p_module.detect_technologies(self.test_path)
+        self.assertNotIn("n/a", technologies)
+        self.assertIn("Python", technologies)
 
 if __name__ == '__main__':
     unittest.main()
