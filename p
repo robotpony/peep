@@ -1001,19 +1001,26 @@ def format_table_row(project, widths):
     # TODOs - show enhanced format if available
     if 'todo_metrics' in project and project['todo_metrics']:
         todo_metrics = project['todo_metrics']
-        todo_text = f"{todo_metrics['total_items']}"
+        todo_text = f""
         if todo_metrics['inline'] and sum(todo_metrics['inline'].values()) > 0:
             inline_total = sum(todo_metrics['inline'].values())
-            todo_text += f"+{inline_total}"
+            todo_text += f"{inline_total}"
+        else:
+            todo_text += f"0"
+        todo_text += f"/{todo_metrics['total_items']}"
     else:
         todo_text = str(project['todo_lines'])
     
     # Issues - show enhanced format if available
     if 'issue_metrics' in project and project['issue_metrics']:
         issue_metrics = project['issue_metrics']
-        issue_text = f"{issue_metrics['items']['total']}"
+        issue_text = f""
         if issue_metrics['items']['open'] > 0:
-            issue_text += f"({issue_metrics['items']['open']})"
+            issue_text += f"{issue_metrics['items']['open']}"
+        else:
+            issue_text += f"0"
+
+        issue_text += f"/{issue_metrics['items']['total']}"
     else:
         issue_text = str(project['issue_lines'])
     
