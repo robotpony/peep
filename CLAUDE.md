@@ -61,7 +61,7 @@ python p [directory] [options]
 - **Advanced Git Integration**: Shows branch names, status indicators (✓ M A D ? U ↑ ↓ ↕), and sync state
 - **Enhanced TODO/Issue Tracking**: Structured markdown parsing plus inline comment scanning with priority scoring
 - **Importance-Based Sorting**: Intelligent ranking by issues, git changes, TODOs, and project activity
-- **Rich Terminal Output**: Unicode table formatting with responsive column sizing
+- **Flexible Display Options**: Compact view by default, optional name column, Unicode table formatting with responsive column sizing
 - **JSON Export**: Machine-readable output for integration with other tools
 - **TOML Configuration**: User and project-specific configuration files for customization
 - **Verbose Debug Mode**: Detailed source information for technology detection and metrics
@@ -78,6 +78,7 @@ p [folder] [options]
 - `-s, --sort [alpha|modified|created|importance]`: Sort projects (default: importance)
 - `-j, --json`: Output results as JSON
 - `-V, --verbose`: Show debug information about sources of TODOs, issues, and technologies
+- `--show-name`: Include Name column in table output (off by default for compact display)
 - `--no-progress`: Disable progress indicators
 - `--exclude EXCLUDE`: Additional directories to exclude (repeatable)
 - `-h, --help`: Display help message

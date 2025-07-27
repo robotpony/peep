@@ -26,7 +26,7 @@ class Config:
     def __init__(self):
         # Default configuration
         self.max_project_name_length = 25
-        self.max_folder_name_length = 20
+        self.max_folder_name_length = 30
         self.min_column_width = 8
         self.default_git_branch = 'main'
         self.git_timeout = 5
@@ -50,6 +50,9 @@ class Config:
         # Filtering configuration
         self.exclude_dirs = ['.git', '__pycache__', 'node_modules', '.venv', 'venv']
         self.exclude_patterns = []
+        
+        # Display configuration
+        self.show_name_column = False
         
         # Load configuration files
         self._load_config()
@@ -912,34 +915,45 @@ def scan_projects(root_path: Union[str, Path], depth: int = 0, collect_debug: bo
     
     return projects
 
-def calculate_column_widths(projects):
+def calculate_column_widths(projects, show_name=False):
     """Calculate optimal column widths for the table."""
     # Get terminal width
     terminal_width = shutil.get_terminal_size().columns
     
-    # Minimum widths for headers
-    widths = [len("Name"), len("Folder"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
+    # Minimum widths for headers (conditionally include Name column)
+    if show_name:
+        widths = [len("Name"), len("Project"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
+    else:
+        widths = [len("Project"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
     
     for project in projects:
-        # Project name - cap at configured length
-        project_name = project['name']
-        widths[0] = max(widths[0], min(len(project_name), config.max_project_name_length))
+        col_idx = 0
+        
+        if show_name:
+            # Project name - cap at configured length
+            project_name = project['name']
+            widths[col_idx] = max(widths[col_idx], min(len(project_name), config.max_project_name_length))
+            col_idx += 1
         
         # Folder name - cap at configured length
         folder_name = project['folder']
-        widths[1] = max(widths[1], min(len(folder_name), config.max_folder_name_length))
+        widths[col_idx] = max(widths[col_idx], min(len(folder_name), config.max_folder_name_length))
+        col_idx += 1
         
         # Branch
         branch_text = project['branch'] or ""
-        widths[2] = max(widths[2], len(branch_text))
+        widths[col_idx] = max(widths[col_idx], len(branch_text))
+        col_idx += 1
         
         # Git status - keep it minimal (4 characters should be enough)
         status_text = project['git_status'] or ""
-        widths[3] = max(widths[3], min(len(status_text), 4))
+        widths[col_idx] = max(widths[col_idx], min(len(status_text), 4))
+        col_idx += 1
         
         # Technologies
         tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
-        widths[4] = max(widths[4], len(tech_text))
+        widths[col_idx] = max(widths[col_idx], len(tech_text))
+        col_idx += 1
         
         # TODOs - show enhanced format if available
         if 'todo_metrics' in project and project['todo_metrics']:
@@ -950,7 +964,8 @@ def calculate_column_widths(projects):
                 todo_text += f"+{inline_total}"
         else:
             todo_text = str(project['todo_lines'])
-        widths[5] = max(widths[5], len(todo_text))
+        widths[col_idx] = max(widths[col_idx], len(todo_text))
+        col_idx += 1
         
         # Issues - show enhanced format if available
         if 'issue_metrics' in project and project['issue_metrics']:
@@ -960,11 +975,14 @@ def calculate_column_widths(projects):
                 issue_text += f"({issue_metrics['items']['open']})"
         else:
             issue_text = str(project['issue_lines'])
-        widths[6] = max(widths[6], len(issue_text))
+        widths[col_idx] = max(widths[col_idx], len(issue_text))
     
     # Enforce maximum widths
-    widths[0] = min(widths[0], config.max_project_name_length)
-    widths[1] = min(widths[1], config.max_folder_name_length)
+    if show_name:
+        widths[0] = min(widths[0], config.max_project_name_length)
+        widths[1] = min(widths[1], config.max_folder_name_length)
+    else:
+        widths[0] = min(widths[0], config.max_folder_name_length)
     
     # Calculate table overhead (borders and padding)
     table_overhead = len(widths) * 3 + 1  # │ col │ col │ etc
@@ -976,27 +994,54 @@ def calculate_column_widths(projects):
         ratio = available_width / total_width
         widths = [max(config.min_column_width, int(w * ratio)) for w in widths]
         # Re-enforce maximums after proportional reduction
-        widths[0] = min(widths[0], config.max_project_name_length)
-        widths[1] = min(widths[1], config.max_folder_name_length)
+        if show_name:
+            widths[0] = min(widths[0], config.max_project_name_length)
+            widths[1] = min(widths[1], config.max_folder_name_length)
+        else:
+            widths[0] = min(widths[0], config.max_folder_name_length)
     
     return widths
 
-def format_table_row(project, widths):
+def format_table_row(project, widths, show_name=False):
     """Format a single project as a table row."""
-    # Project name
-    project_name = project['name']
+    col_idx = 0
+    columns = []
+    
+    if show_name:
+        # Project name
+        project_name = project['name']
+        if len(project_name) > widths[col_idx]:
+            project_name = project_name[:widths[col_idx]-1] + "…"
+        columns.append(f" {project_name:<{widths[col_idx]}} ")
+        col_idx += 1
     
     # Folder name
     folder_name = project['folder']
+    if len(folder_name) > widths[col_idx]:
+        folder_name = folder_name[:widths[col_idx]-1] + "…"
+    columns.append(f" {folder_name:<{widths[col_idx]}} ")
+    col_idx += 1
     
     # Branch
     branch_text = project['branch'] or ""
+    if len(branch_text) > widths[col_idx]:
+        branch_text = branch_text[:widths[col_idx]-1] + "…"
+    columns.append(f" {branch_text:<{widths[col_idx]}} ")
+    col_idx += 1
     
     # Git status
     status_text = project['git_status'] or ""
+    if len(status_text) > widths[col_idx]:
+        status_text = status_text[:widths[col_idx]-1] + "…"
+    columns.append(f" {status_text:<{widths[col_idx]}} ")
+    col_idx += 1
     
     # Technologies
     tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
+    if len(tech_text) > widths[col_idx]:
+        tech_text = tech_text[:widths[col_idx]-1] + "…"
+    columns.append(f" {tech_text:<{widths[col_idx]}} ")
+    col_idx += 1
     
     # TODOs - show enhanced format if available
     if 'todo_metrics' in project and project['todo_metrics']:
@@ -1010,6 +1055,10 @@ def format_table_row(project, widths):
         todo_text += f"/{todo_metrics['total_items']}"
     else:
         todo_text = str(project['todo_lines'])
+    if len(todo_text) > widths[col_idx]:
+        todo_text = todo_text[:widths[col_idx]-1] + "…"
+    columns.append(f" {todo_text:<{widths[col_idx]}} ")
+    col_idx += 1
     
     # Issues - show enhanced format if available
     if 'issue_metrics' in project and project['issue_metrics']:
@@ -1019,28 +1068,14 @@ def format_table_row(project, widths):
             issue_text += f"{issue_metrics['items']['open']}"
         else:
             issue_text += f"0"
-
         issue_text += f"/{issue_metrics['items']['total']}"
     else:
         issue_text = str(project['issue_lines'])
+    if len(issue_text) > widths[col_idx]:
+        issue_text = issue_text[:widths[col_idx]-1] + "…"
+    columns.append(f" {issue_text:<{widths[col_idx]}} ")
     
-    # Truncate if too long (with ellipsis for visual indication)
-    if len(project_name) > widths[0]:
-        project_name = project_name[:widths[0]-1] + "…"
-    if len(folder_name) > widths[1]:
-        folder_name = folder_name[:widths[1]-1] + "…"
-    if len(branch_text) > widths[2]:
-        branch_text = branch_text[:widths[2]-1] + "…"
-    if len(status_text) > widths[3]:
-        status_text = status_text[:widths[3]-1] + "…"
-    if len(tech_text) > widths[4]:
-        tech_text = tech_text[:widths[4]-1] + "…"
-    if len(todo_text) > widths[5]:
-        todo_text = todo_text[:widths[5]-1] + "…"
-    if len(issue_text) > widths[6]:
-        issue_text = issue_text[:widths[6]-1] + "…"
-    
-    return f"│ {project_name:<{widths[0]}} │ {folder_name:<{widths[1]}} │ {branch_text:<{widths[2]}} │ {status_text:<{widths[3]}} │ {tech_text:<{widths[4]}} │ {todo_text:<{widths[5]}} │ {issue_text:<{widths[6]}} │"
+    return "│" + "│".join(columns) + "│"
 
 def format_table_separator(widths, top=False, bottom=False):
     """Format table separator line."""
@@ -1057,9 +1092,12 @@ def format_table_separator(widths, top=False, bottom=False):
     
     return left + cross.join(parts) + right
 
-def format_table_header(widths):
+def format_table_header(widths, show_name=False):
     """Format the table header row."""
-    headers = ["Name", "Folder", "Branch", "Git", "Technologies", "TODOs", "Issues"]
+    if show_name:
+        headers = ["Name", "Project", "Branch", "Git", "Technologies", "TODOs", "Issues"]
+    else:
+        headers = ["Project", "Branch", "Git", "Technologies", "TODOs", "Issues"]
     formatted_headers = [f" {header:<{width}} " for header, width in zip(headers, widths)]
     return "│" + "│".join(formatted_headers) + "│"
 
@@ -1149,6 +1187,7 @@ def main():
     parser.add_argument('-V', '--verbose', action='store_true', help='Show debug information about sources of TODOs, issues, and technologies')
     parser.add_argument('--no-progress', action='store_true', help='Disable progress indicators')
     parser.add_argument('--exclude', action='append', help='Additional directories to exclude (can be used multiple times)')
+    parser.add_argument('--show-name', action='store_true', help='Include Name column in table output')
     parser.add_argument('-v', '--version', action='version', version=f'p {VERSION}')
     
     args = parser.parse_args()
@@ -1160,6 +1199,9 @@ def main():
     # Override progress setting if specified
     if args.no_progress:
         config.show_progress = False
+    
+    # Determine whether to show name column (command line overrides config)
+    show_name = args.show_name or config.show_name_column
     
     # Resolve path
     scan_path = Path(args.folder).resolve()
@@ -1197,11 +1239,23 @@ def main():
     
     # Output results
     if args.json:
-        # Convert Path objects to strings for JSON serialization
+        # Convert Path objects and sets to strings for JSON serialization
+        def convert_sets_to_lists(obj):
+            """Recursively convert sets to lists for JSON serialization."""
+            if isinstance(obj, dict):
+                return {k: convert_sets_to_lists(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_sets_to_lists(item) for item in obj]
+            elif isinstance(obj, set):
+                return list(obj)
+            elif isinstance(obj, Path):
+                return str(obj)
+            else:
+                return obj
+        
         json_projects = []
         for project in projects:
-            json_project = project.copy()
-            json_project['path'] = str(json_project['path'])
+            json_project = convert_sets_to_lists(project)
             json_projects.append(json_project)
         
         output = {
@@ -1215,15 +1269,15 @@ def main():
         print()
         
         # Calculate column widths
-        widths = calculate_column_widths(projects)
+        widths = calculate_column_widths(projects, show_name)
         
         # Print table
         print(format_table_separator(widths, top=True))
-        print(format_table_header(widths))
+        print(format_table_header(widths, show_name))
         print(format_table_separator(widths))
         
         for project in projects:
-            print(format_table_row(project, widths))
+            print(format_table_row(project, widths, show_name))
         
         print(format_table_separator(widths, bottom=True))
         
