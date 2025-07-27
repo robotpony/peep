@@ -486,6 +486,15 @@ def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str
             for item in dir_path.iterdir():
                 if item.is_file():
                     name = item.name.upper()
+                    
+                    # Skip image files - common image extensions
+                    image_extensions = {'.PNG', '.JPG', '.JPEG', '.GIF', '.BMP', '.TIFF', '.TIF', 
+                                       '.WEBP', '.SVG', '.ICO', '.HEIC', '.HEIF', '.RAW',
+                                       '.AVIF', '.JFIF', '.EPS', '.WEBM', '.MP4', '.AVI', '.MOV',
+                                       '.PDF', '.APNG', '.FLIF', '.XBM', '.XPM', '.DDS', '.TGA'}
+                    if any(name.endswith(ext) for ext in image_extensions):
+                        continue
+                    
                     # Check if filename contains any of the patterns
                     if any(pattern in name for pattern in file_patterns):
                         # Check if it has an allowed extension

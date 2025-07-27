@@ -235,6 +235,59 @@ class TestProjectScanner(unittest.TestCase):
         technologies = p_module.detect_technologies(self.test_path)
         self.assertNotIn("n/a", technologies)
         self.assertIn("Python", technologies)
+    
+    def test_ignore_image_files_in_issue_tracking(self):
+        """Test that image files are ignored when scanning for issue files."""
+        # Create an image file with "bug" in the name
+        bug_image = self.test_path / "bug_screenshot.png"
+        bug_image.write_bytes(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01')  # Minimal PNG header
+        
+        # Create a legitimate issue file
+        issues_file = self.test_path / "ISSUES.md"
+        issues_file.write_text("# Issues\n\n- Bug 1\n- Bug 2\n")
+        
+        # Count issue lines - should only count the markdown file, not the image
+        issue_count = p_module.count_issue_lines(self.test_path)
+        self.assertEqual(issue_count, 4)  # Only from ISSUES.md, not the image
+    
+    def test_ignore_various_image_extensions(self):
+        """Test that various image file extensions are ignored."""
+        # Create image files with issue-related names but different extensions
+        image_files = [
+            "bug_report.jpg", "issue_diagram.png", "problem_screenshot.gif",
+            "error_image.bmp", "bug_flow.svg", "issue_chart.webp",
+            "bug_screenshot.avif", "issue_photo.jfif", "BUG_chart.eps",
+            "issue_video.webm", "bug_clip.mp4", "issue_movie.avi",
+            "bug_presentation.pdf", "issue_animation.apng"
+        ]
+        
+        for image_file in image_files:
+            image_path = self.test_path / image_file
+            image_path.write_bytes(b'\xff\xd8\xff\xe0')  # Minimal binary header
+        
+        # Create a real issues file
+        (self.test_path / "ISSUES.txt").write_text("Real issue content\nLine 2\n")
+        
+        # Should only count lines from the text file, not any images
+        issue_count = p_module.count_issue_lines(self.test_path)
+        self.assertEqual(issue_count, 2)  # Only from ISSUES.txt
+    
+    def test_count_issue_lines_with_debug(self):
+        """Test counting issue lines with debug information."""
+        # Create both text and image files
+        (self.test_path / "BUG_REPORT.md").write_text("# Bug Report\n\nDetails here\n")
+        (self.test_path / "bug_screenshot.png").write_bytes(b'\x89PNG\r\n\x1a\n')
+        
+        debug_info = []
+        issue_count = p_module.count_issue_lines(self.test_path, debug_info)
+        
+        # Should count 3 lines from markdown file
+        self.assertEqual(issue_count, 3)
+        
+        # Debug info should only mention the markdown file, not the image
+        self.assertEqual(len(debug_info), 1)
+        self.assertEqual(debug_info[0]['file'], 'BUG_REPORT.md')
+        self.assertEqual(debug_info[0]['lines'], 3)
 
 if __name__ == '__main__':
     unittest.main()
