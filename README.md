@@ -54,6 +54,9 @@ Scanning /Users/mx/projects...
 # JSON output for scripts
 ./p -j /path/to/projects
 
+# Verbose mode with debug information
+./p -V /path/to/projects
+
 # Exclude additional directories
 ./p --exclude temp --exclude backup
 
@@ -137,6 +140,7 @@ Supports: JavaScript, Python, Rust, Go, Java, PHP, Ruby, Docker, and many more.
 
 - `-s, --sort [alpha|modified|created|importance]`: Sort projects
 - `-j, --json`: Output results as JSON
+- `-V, --verbose`: Show debug information about sources of TODOs, issues, and technologies
 - `--no-progress`: Disable progress indicators  
 - `--exclude EXCLUDE`: Additional directories to exclude (repeatable)
 - `-h, --help`: Display help message

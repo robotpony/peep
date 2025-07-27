@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is "p" - a command-line script for summarizing projects in specified folders. The tool scans directories and provides markdown-formatted summaries including project names, git branches, technologies used, and links to documentation.
+This is "p" (peep) - a sophisticated command-line tool for analyzing and summarizing software projects in directories. The tool recursively scans folders to identify projects, extracts comprehensive metadata, and presents organized summaries in table or JSON format with intelligent project importance scoring.
 
 ## Architecture
 
@@ -14,35 +14,81 @@ This is "p" - a command-line script for summarizing projects in specified folder
 
 ### Design
 
-`p` is a python script for displaying details of projects in the current (or provided) folder.
+`p` is a comprehensive Python script (version 1.0.0) for analyzing software projects with the following capabilities:
 
-- Takes a folder path as input (defaults to current working directory)
-- Scans for projects in subdirectories
-- Extracts metadata from README.md files and git repositories
-- Outputs markdown-formatted project summaries
-- Supports sorting by alpha, modified, or created date
+- **Recursive Directory Scanning**: Configurable depth limits and smart exclusion of common build/cache directories
+- **Project Detection**: Identifies projects via README files, package manifests, git repositories, and code patterns
+- **Technology Recognition**: Auto-detects 20+ technologies including Python, JavaScript, Rust, Go, Docker, and frameworks
+- **Git Integration**: Shows branch names, commit status, and sync state with remote repositories
+- **Enhanced TODO/Issue Tracking**: Structured parsing of markdown files plus inline code comment scanning
+- **Importance Scoring**: Intelligent prioritization based on open issues, git changes, and pending TODOs
+- **Multiple Output Formats**: Rich terminal tables or JSON for programmatic use
+- **Configuration Support**: TOML-based configuration with user and project-specific overrides
 
 ## Development Commands
 
-This project does not appear to have traditional build/test commands. The main functionality is likely executed directly as a script named `p`.
+### Testing
+```bash
+python -m pytest test/test_p.py -v
+```
+
+### Running the Tool
+```bash
+# Direct execution
+./p [directory] [options]
+
+# With Python interpreter
+python p [directory] [options]
+```
+
+### Development Testing
+```bash
+# Test basic functionality
+./p --help
+./p --version
+
+# Test scanning current directory
+./p . -V
+
+# Test JSON output
+./p . -j
+```
 
 ## Key Features
 
-- Markdown output format
-- Git branch detection
-- Technology stack identification
-- Automatic linking to README.md and claude.md files
-- Configurable sorting options
-- Directory scanning with last-modified ordering by default
+- **Smart Project Detection**: Automatically identifies projects via README files, package manifests, git repos, and code patterns
+- **Technology Auto-Detection**: Recognizes 20+ technologies and frameworks from project files and dependencies
+- **Advanced Git Integration**: Shows branch names, status indicators (✓ M A D ? U ↑ ↓ ↕), and sync state
+- **Enhanced TODO/Issue Tracking**: Structured markdown parsing plus inline comment scanning with priority scoring
+- **Importance-Based Sorting**: Intelligent ranking by issues, git changes, TODOs, and project activity
+- **Rich Terminal Output**: Unicode table formatting with responsive column sizing
+- **JSON Export**: Machine-readable output for integration with other tools
+- **TOML Configuration**: User and project-specific configuration files for customization
+- **Verbose Debug Mode**: Detailed source information for technology detection and metrics
+- **Extensible Architecture**: Plugin-like technology detection with custom file pattern support
 
 ## Usage Pattern
 
-Based on the README, the tool is invoked as:
+The tool is invoked as:
 ```
 p [folder] [options]
 ```
 
-With options:
-- `-s, --sort [alpha|modified|created]`: Sort projects
-- `-h, --help`: Display help
-- `-v, --version`: Display version
+### Core Options
+- `-s, --sort [alpha|modified|created|importance]`: Sort projects (default: importance)
+- `-j, --json`: Output results as JSON
+- `-V, --verbose`: Show debug information about sources of TODOs, issues, and technologies
+- `--no-progress`: Disable progress indicators
+- `--exclude EXCLUDE`: Additional directories to exclude (repeatable)
+- `-h, --help`: Display help message
+- `-v, --version`: Display version (currently 1.0.0)
+
+### Configuration
+Supports TOML configuration files:
+- `~/.config/p/config.toml` (global)
+- `p.toml` or `.p.toml` (project-specific)
+
+### Output Formats
+- **Table**: Rich Unicode terminal tables with responsive sizing
+- **JSON**: Structured data with full metadata for programmatic use
+- **Verbose**: Additional debug information showing technology detection sources

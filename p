@@ -473,15 +473,132 @@ def _has_any_code_files(project_path: Path) -> bool:
         
     return False
 
-def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str], 
-                        subfolders: List[str], extensions: List[str], debug_info: List[Dict] = None) -> int:
-    """Count lines in files matching given patterns."""
+def count_structured_items(content: str) -> Dict[str, int]:
+    """Count actual items instead of just lines in markdown content."""
+    items = {'open': 0, 'completed': 0, 'total': 0}
+    
+    for line in content.split('\n'):
+        line = line.strip()
+        # Count markdown list items (bullet points)
+        if re.match(r'^[-*+]\s+', line):
+            items['total'] += 1
+            if re.match(r'^[-*+]\s+\[x\]', line, re.IGNORECASE):
+                items['completed'] += 1
+            else:
+                items['open'] += 1
+        # Count numbered lists
+        elif re.match(r'^\d+\.\s+', line):
+            items['total'] += 1
+            items['open'] += 1  # Assume numbered items are open
+    
+    return items
+
+def extract_issue_metadata(content: str) -> Dict[str, any]:
+    """Extract priority, labels, and severity from issue content."""
+    metadata = {
+        'priority_counts': {'high': 0, 'medium': 0, 'low': 0},
+        'labels': set(),
+        'severity_score': 0
+    }
+    
+    priority_patterns = {
+        'high': re.compile(r'\b(urgent|critical|high priority|p0|p1)\b', re.IGNORECASE),
+        'medium': re.compile(r'\b(medium priority|normal priority|p2)\b', re.IGNORECASE),
+        'low': re.compile(r'\b(low priority|minor|p3|p4)\b', re.IGNORECASE)
+    }
+    
+    # Extract labels from markdown: <!-- labels: bug, ui, frontend -->
+    label_pattern = re.compile(r'<!--\s*labels?:\s*([^-->]+)\s*-->', re.IGNORECASE)
+    
+    for line in content.split('\n'):
+        # Check for priority keywords
+        for priority, pattern in priority_patterns.items():
+            if pattern.search(line):
+                metadata['priority_counts'][priority] += 1
+        
+        # Extract labels
+        label_match = label_pattern.search(line)
+        if label_match:
+            labels = [l.strip() for l in label_match.group(1).split(',')]
+            metadata['labels'].update(labels)
+    
+    # Calculate weighted severity score
+    metadata['severity_score'] = (
+        metadata['priority_counts']['high'] * 100 +
+        metadata['priority_counts']['medium'] * 10 +
+        metadata['priority_counts']['low'] * 1
+    )
+    
+    return metadata
+
+def scan_inline_todos(project_path: Path, debug_info: List[Dict] = None) -> Dict[str, int]:
+    """Find TODO/FIXME comments in code files."""
+    patterns = {
+        'todo': re.compile(r'(//|#|<!--|\*|/\*)\s*TODO\b', re.IGNORECASE),
+        'fixme': re.compile(r'(//|#|<!--|\*|/\*)\s*FIXME\b', re.IGNORECASE),
+        'bug': re.compile(r'(//|#|<!--|\*|/\*)\s*BUG\b', re.IGNORECASE),
+        'hack': re.compile(r'(//|#|<!--|\*|/\*)\s*HACK\b', re.IGNORECASE)
+    }
+    
+    counts = {'todo': 0, 'fixme': 0, 'bug': 0, 'hack': 0}
+    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.c', '.go', '.rs', 
+                      '.php', '.rb', '.swift', '.kt', '.scala', '.clj', '.cs', '.fs', '.vb',
+                      '.sh', '.bash', '.zsh', '.fish', '.html', '.css', '.scss', '.sass'}
+    
+    try:
+        for file_path in project_path.rglob('*'):
+            if (file_path.is_file() and 
+                file_path.suffix.lower() in code_extensions and
+                not any(excluded in str(file_path) for excluded in config.exclude_dirs)):
+                
+                try:
+                    content = file_path.read_text(encoding='utf-8', errors='ignore')
+                    file_counts = {}
+                    
+                    for pattern_type, pattern in patterns.items():
+                        matches = pattern.findall(content)
+                        count = len(matches)
+                        counts[pattern_type] += count
+                        if count > 0:
+                            file_counts[pattern_type] = count
+                    
+                    if debug_info is not None and file_counts:
+                        relative_path = file_path.relative_to(project_path)
+                        debug_info.append({
+                            'file': str(relative_path),
+                            'inline_counts': file_counts,
+                            'type': 'inline'
+                        })
+                        
+                except (PermissionError, UnicodeDecodeError, OSError):
+                    pass
+    except (PermissionError, OSError):
+        pass
+    
+    return counts
+
+def count_items_in_files(project_path: Union[str, Path], file_patterns: List[str], 
+                        subfolders: List[str], extensions: List[str], debug_info: List[Dict] = None) -> Dict[str, any]:
+    """Count structured items in files matching given patterns with enhanced metrics."""
     project_path = Path(project_path)
-    total_lines = 0
+    total_metrics = {
+        'items': {'open': 0, 'completed': 0, 'total': 0},
+        'lines': 0,
+        'priority_counts': {'high': 0, 'medium': 0, 'low': 0},
+        'severity_score': 0,
+        'labels': set()
+    }
     
     def scan_directory(dir_path):
         """Recursively scan a directory for matching files."""
-        lines = 0
+        metrics = {
+            'items': {'open': 0, 'completed': 0, 'total': 0},
+            'lines': 0,
+            'priority_counts': {'high': 0, 'medium': 0, 'low': 0},
+            'severity_score': 0,
+            'labels': set()
+        }
+        
         try:
             for item in dir_path.iterdir():
                 if item.is_file():
@@ -501,53 +618,148 @@ def count_lines_in_files(project_path: Union[str, Path], file_patterns: List[str
                         if any(name.endswith(ext.upper()) for ext in extensions) or \
                            ('.' not in name and '' in extensions):
                             try:
-                                with open(item, 'r', encoding='utf-8', errors='ignore') as f:
-                                    file_lines = sum(1 for _ in f)
-                                    lines += file_lines
-                                    if debug_info is not None:
-                                        relative_path = item.relative_to(project_path)
-                                        debug_info.append({
-                                            'file': str(relative_path),
-                                            'lines': file_lines
-                                        })
+                                content = item.read_text(encoding='utf-8', errors='ignore')
+                                file_lines = sum(1 for _ in content.split('\n'))
+                                
+                                # Count structured items
+                                item_counts = count_structured_items(content)
+                                
+                                # Extract metadata
+                                metadata = extract_issue_metadata(content)
+                                
+                                # Update metrics
+                                metrics['lines'] += file_lines
+                                for key in item_counts:
+                                    metrics['items'][key] += item_counts[key]
+                                for priority in metadata['priority_counts']:
+                                    metrics['priority_counts'][priority] += metadata['priority_counts'][priority]
+                                metrics['severity_score'] += metadata['severity_score']
+                                metrics['labels'].update(metadata['labels'])
+                                
+                                if debug_info is not None:
+                                    relative_path = item.relative_to(project_path)
+                                    debug_info.append({
+                                        'file': str(relative_path),
+                                        'lines': file_lines,
+                                        'items': item_counts,
+                                        'metadata': {
+                                            'priority_counts': metadata['priority_counts'],
+                                            'severity_score': metadata['severity_score'],
+                                            'labels': list(metadata['labels'])
+                                        },
+                                        'type': 'structured'
+                                    })
                             except (PermissionError, UnicodeDecodeError):
                                 pass
         except PermissionError:
             pass
-        return lines
+        return metrics
     
     # Scan root directory
-    total_lines += scan_directory(project_path)
+    root_metrics = scan_directory(project_path)
+    for key in total_metrics:
+        if key == 'items':
+            for subkey in total_metrics[key]:
+                total_metrics[key][subkey] += root_metrics[key][subkey]
+        elif key == 'priority_counts':
+            for priority in total_metrics[key]:
+                total_metrics[key][priority] += root_metrics[key][priority]
+        elif key == 'labels':
+            total_metrics[key].update(root_metrics[key])
+        else:
+            total_metrics[key] += root_metrics[key]
     
     # Scan specific subfolders
     for subfolder in subfolders:
         subfolder_path = project_path / subfolder
         if subfolder_path.exists() and subfolder_path.is_dir():
-            total_lines += scan_directory(subfolder_path)
+            subfolder_metrics = scan_directory(subfolder_path)
+            for key in total_metrics:
+                if key == 'items':
+                    for subkey in total_metrics[key]:
+                        total_metrics[key][subkey] += subfolder_metrics[key][subkey]
+                elif key == 'priority_counts':
+                    for priority in total_metrics[key]:
+                        total_metrics[key][priority] += subfolder_metrics[key][priority]
+                elif key == 'labels':
+                    total_metrics[key].update(subfolder_metrics[key])
+                else:
+                    total_metrics[key] += subfolder_metrics[key]
     
-    return total_lines
+    return total_metrics
+
+def count_todo_items(project_path: Union[str, Path], debug_info: List[Dict] = None) -> Dict[str, any]:
+    """Count TODO items using enhanced structured parsing and inline scanning."""
+    # Get structured TODO items from dedicated files
+    structured_metrics = count_items_in_files(project_path, config.todo_file_patterns, 
+                                            config.todo_subfolders, config.todo_extensions, debug_info)
+    
+    # Get inline TODOs from code files
+    inline_counts = scan_inline_todos(project_path, debug_info)
+    
+    # Combine metrics
+    combined_metrics = {
+        'structured': structured_metrics,
+        'inline': inline_counts,
+        'total_items': structured_metrics['items']['total'] + sum(inline_counts.values()),
+        'total_lines': structured_metrics['lines'],
+        'severity_score': structured_metrics['severity_score'] + (inline_counts['fixme'] * 50) + (inline_counts['bug'] * 75),
+        'priority_counts': structured_metrics['priority_counts'].copy(),
+        'labels': structured_metrics['labels'].copy()
+    }
+    
+    return combined_metrics
+
+def count_issue_items(project_path: Union[str, Path], debug_info: List[Dict] = None) -> Dict[str, any]:
+    """Count issue items using enhanced structured parsing."""
+    return count_items_in_files(project_path, config.issue_file_patterns, 
+                               config.issue_subfolders, config.issue_extensions, debug_info)
 
 def count_todo_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
-    """Count lines in files with 'TODO' in uppercase in the title."""
-    return count_lines_in_files(project_path, config.todo_file_patterns, config.todo_subfolders, config.todo_extensions, debug_info)
+    """Legacy function for backward compatibility - count lines in TODO files."""
+    metrics = count_todo_items(project_path, debug_info)
+    return metrics['total_lines']
 
 def count_issue_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
-    """Count lines in ISSUES.md, BUGS.md and similar files."""
-    return count_lines_in_files(project_path, config.issue_file_patterns, config.issue_subfolders, config.issue_extensions, debug_info)
+    """Legacy function for backward compatibility - count lines in issue files."""
+    metrics = count_issue_items(project_path, debug_info)
+    return metrics['lines']
 
 def calculate_importance_score(project: Dict[str, Union[str, int, float, Path, List[str], None]]) -> int:
-    """Calculate importance score based on issues, git status, and TODOs."""
+    """Calculate importance score based on enhanced issue and TODO metrics."""
     score = 0
     
-    # Issues are highest priority (×1000)
-    score += project['issue_lines'] * 1000
+    # Enhanced issue scoring using severity and priority
+    if 'issue_metrics' in project and project['issue_metrics']:
+        issue_metrics = project['issue_metrics']
+        # Base score from issue severity
+        score += issue_metrics['severity_score'] * 10
+        # Additional score for open items
+        score += issue_metrics['items']['open'] * 500
+        # High priority items get extra weight
+        score += issue_metrics['priority_counts']['high'] * 200
+        score += issue_metrics['priority_counts']['medium'] * 50
+    else:
+        # Fallback to legacy line count
+        score += project.get('issue_lines', 0) * 1000
     
-    # Git status: non-clean repos need attention (+100)
+    # Git status: non-clean repos need attention
     if project['git_status'] and project['git_status'] != '✓':
         score += 100
     
-    # TODOs are lower priority (×10)
-    score += project['todo_lines'] * 10
+    # Enhanced TODO scoring
+    if 'todo_metrics' in project and project['todo_metrics']:
+        todo_metrics = project['todo_metrics']
+        # Score based on TODO severity
+        score += todo_metrics['severity_score']
+        # Additional score for total items
+        score += todo_metrics['total_items'] * 5
+        # Inline FIXMEs and BUGs are more urgent
+        score += todo_metrics['inline'].get('fixme', 0) * 25
+        score += todo_metrics['inline'].get('bug', 0) * 40
+    else:
+        # Fallback to legacy line count
+        score += project.get('todo_lines', 0) * 10
     
     return score
 
@@ -572,11 +784,13 @@ def get_project_info(project_path: Union[str, Path], collect_debug: bool = False
     # Detect technologies
     technologies = detect_technologies(project_path, tech_debug)
     
-    # Count TODO lines
-    todo_lines = count_todo_lines(project_path, todo_debug)
+    # Enhanced TODO and issue metrics
+    todo_metrics = count_todo_items(project_path, todo_debug)
+    issue_metrics = count_issue_items(project_path, issue_debug)
     
-    # Count issue lines
-    issue_lines = count_issue_lines(project_path, issue_debug)
+    # Legacy line counts for backward compatibility
+    todo_lines = todo_metrics['total_lines']
+    issue_lines = issue_metrics['lines']
     
     # Get modification times
     try:
@@ -593,6 +807,8 @@ def get_project_info(project_path: Union[str, Path], collect_debug: bool = False
         'technologies': technologies,
         'todo_lines': todo_lines,
         'issue_lines': issue_lines,
+        'todo_metrics': todo_metrics,
+        'issue_metrics': issue_metrics,
         'mod_time': mod_time,
         'create_time': create_time,
         'path': project_path
@@ -725,12 +941,25 @@ def calculate_column_widths(projects):
         tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
         widths[4] = max(widths[4], len(tech_text))
         
-        # TODOs
-        todo_text = str(project['todo_lines'])
+        # TODOs - show enhanced format if available
+        if 'todo_metrics' in project and project['todo_metrics']:
+            todo_metrics = project['todo_metrics']
+            todo_text = f"{todo_metrics['total_items']}"
+            if todo_metrics['inline'] and sum(todo_metrics['inline'].values()) > 0:
+                inline_total = sum(todo_metrics['inline'].values())
+                todo_text += f"+{inline_total}"
+        else:
+            todo_text = str(project['todo_lines'])
         widths[5] = max(widths[5], len(todo_text))
         
-        # Issues
-        issue_text = str(project['issue_lines'])
+        # Issues - show enhanced format if available
+        if 'issue_metrics' in project and project['issue_metrics']:
+            issue_metrics = project['issue_metrics']
+            issue_text = f"{issue_metrics['items']['total']}"
+            if issue_metrics['items']['open'] > 0:
+                issue_text += f"({issue_metrics['items']['open']})"
+        else:
+            issue_text = str(project['issue_lines'])
         widths[6] = max(widths[6], len(issue_text))
     
     # Enforce maximum widths
@@ -769,11 +998,24 @@ def format_table_row(project, widths):
     # Technologies
     tech_text = ', '.join(project['technologies']) if project['technologies'] else ""
     
-    # TODOs
-    todo_text = str(project['todo_lines'])
+    # TODOs - show enhanced format if available
+    if 'todo_metrics' in project and project['todo_metrics']:
+        todo_metrics = project['todo_metrics']
+        todo_text = f"{todo_metrics['total_items']}"
+        if todo_metrics['inline'] and sum(todo_metrics['inline'].values()) > 0:
+            inline_total = sum(todo_metrics['inline'].values())
+            todo_text += f"+{inline_total}"
+    else:
+        todo_text = str(project['todo_lines'])
     
-    # Issues
-    issue_text = str(project['issue_lines'])
+    # Issues - show enhanced format if available
+    if 'issue_metrics' in project and project['issue_metrics']:
+        issue_metrics = project['issue_metrics']
+        issue_text = f"{issue_metrics['items']['total']}"
+        if issue_metrics['items']['open'] > 0:
+            issue_text += f"({issue_metrics['items']['open']})"
+    else:
+        issue_text = str(project['issue_lines'])
     
     # Truncate if too long (with ellipsis for visual indication)
     if len(project_name) > widths[0]:
@@ -850,15 +1092,42 @@ def format_debug_info(projects):
         
         # TODO sources
         if debug_data.get('todos'):
-            output.append("### TODO File Sources:")
+            output.append("### TODO Sources:")
             for todo_info in debug_data['todos']:
-                output.append(f"  • {todo_info['file']} ({todo_info['lines']} lines)")
+                if todo_info.get('type') == 'structured':
+                    items = todo_info.get('items', {})
+                    metadata = todo_info.get('metadata', {})
+                    output.append(f"  • {todo_info['file']} ({todo_info['lines']} lines, {items.get('total', 0)} items)")
+                    if items.get('completed', 0) > 0:
+                        output.append(f"    - {items['completed']} completed, {items['open']} open")
+                    if metadata.get('severity_score', 0) > 0:
+                        output.append(f"    - Priority score: {metadata['severity_score']}")
+                elif todo_info.get('type') == 'inline':
+                    inline_counts = todo_info.get('inline_counts', {})
+                    counts_str = ', '.join([f"{k}: {v}" for k, v in inline_counts.items() if v > 0])
+                    output.append(f"  • {todo_info['file']} (inline: {counts_str})")
+                else:
+                    # Legacy format
+                    output.append(f"  • {todo_info['file']} ({todo_info['lines']} lines)")
         
         # Issue sources
         if debug_data.get('issues'):
-            output.append("### Issue File Sources:")
+            output.append("### Issue Sources:")
             for issue_info in debug_data['issues']:
-                output.append(f"  • {issue_info['file']} ({issue_info['lines']} lines)")
+                if issue_info.get('type') == 'structured':
+                    items = issue_info.get('items', {})
+                    metadata = issue_info.get('metadata', {})
+                    output.append(f"  • {issue_info['file']} ({issue_info['lines']} lines, {items.get('total', 0)} items)")
+                    if items.get('completed', 0) > 0:
+                        output.append(f"    - {items['completed']} completed, {items['open']} open")
+                    if metadata.get('severity_score', 0) > 0:
+                        output.append(f"    - Priority score: {metadata['severity_score']}")
+                    if metadata.get('labels'):
+                        labels_str = ', '.join(metadata['labels'])
+                        output.append(f"    - Labels: {labels_str}")
+                else:
+                    # Legacy format
+                    output.append(f"  • {issue_info['file']} ({issue_info['lines']} lines)")
         
         output.append("")  # Add blank line between projects
     
