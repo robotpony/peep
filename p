@@ -941,9 +941,9 @@ def calculate_column_widths(projects, show_name=False):
     
     # Minimum widths for headers (conditionally include Name column)
     if show_name:
-        widths = [len("Name"), len("Project"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
+        widths = [len("Name"), len("Project"), len("Branch"), len("Git"), len("Stack"), len("TODOs"), len("Issues")]
     else:
-        widths = [len("Project"), len("Branch"), len("Git"), len("Technologies"), len("TODOs"), len("Issues")]
+        widths = [len("Project"), len("Branch"), len("Git"), len("Stack"), len("TODOs"), len("Issues")]
     
     for project in projects:
         col_idx = 0
@@ -1114,9 +1114,9 @@ def format_table_separator(widths, top=False, bottom=False):
 def format_table_header(widths, show_name=False):
     """Format the table header row."""
     if show_name:
-        headers = ["Name", "Project", "Branch", "Git", "Technologies", "TODOs", "Issues"]
+        headers = ["Name", "Project", "Branch", "Git", "Stack", "TODOs", "Issues"]
     else:
-        headers = ["Project", "Branch", "Git", "Technologies", "TODOs", "Issues"]
+        headers = ["Project", "Branch", "Git", "Stack", "TODOs", "Issues"]
     formatted_headers = [f" {header:<{width}} " for header, width in zip(headers, widths)]
     return "│" + "│".join(formatted_headers) + "│"
 
