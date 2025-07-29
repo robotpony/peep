@@ -50,6 +50,7 @@ class Config:
         # Filtering configuration
         self.exclude_dirs = ['.git', '__pycache__', 'node_modules', '.venv', 'venv']
         self.exclude_patterns = []
+        self.filter_dirs = ['archive']
         
         # Display configuration
         self.show_name_column = False
@@ -766,10 +767,20 @@ def calculate_importance_score(project: Dict[str, Union[str, int, float, Path, L
     
     return score
 
-def get_project_info(project_path: Union[str, Path], collect_debug: bool = False) -> Dict[str, Union[str, int, float, Path, List[str], None]]:
+def get_project_info(project_path: Union[str, Path], collect_debug: bool = False, scan_root: Union[str, Path, None] = None) -> Dict[str, Union[str, int, float, Path, List[str], None]]:
     """Get comprehensive information about a project."""
     project_path = Path(project_path)
-    folder_name = project_path.name
+    
+    # Calculate folder name relative to scan root if provided
+    if scan_root is not None:
+        scan_root = Path(scan_root)
+        try:
+            folder_name = str(project_path.relative_to(scan_root))
+        except ValueError:
+            # Fallback if project_path is not relative to scan_root
+            folder_name = project_path.name
+    else:
+        folder_name = project_path.name
     
     # Get project name from README
     readme_path = project_path / 'README.md'
@@ -885,10 +896,14 @@ def _has_significant_code_files(path: Path) -> bool:
         
     return False
 
-def scan_projects(root_path: Union[str, Path], depth: int = 0, collect_debug: bool = False) -> List[Dict[str, Union[str, int, float, Path, List[str], None]]]:
+def scan_projects(root_path: Union[str, Path], depth: int = 0, collect_debug: bool = False, scan_root: Union[str, Path, None] = None) -> List[Dict[str, Union[str, int, float, Path, List[str], None]]]:
     """Scan for projects in the given directory with depth limiting and filtering."""
     root_path = Path(root_path)
     projects = []
+    
+    # Set scan_root to root_path if not provided (first call)
+    if scan_root is None:
+        scan_root = root_path
     
     # Check depth limit
     if depth > config.max_scan_depth:
@@ -904,12 +919,16 @@ def scan_projects(root_path: Union[str, Path], depth: int = 0, collect_debug: bo
             if any(pattern in item.name for pattern in config.exclude_patterns):
                 continue
                 
+            # Skip if matches filter directories
+            if item.name in config.filter_dirs:
+                continue
+                
             if item.is_dir():
                 if is_project_directory(item):
-                    projects.append(get_project_info(item, collect_debug))
+                    projects.append(get_project_info(item, collect_debug, scan_root))
                 else:
                     # Recursively scan subdirectories if not a project
-                    projects.extend(scan_projects(item, depth + 1, collect_debug))
+                    projects.extend(scan_projects(item, depth + 1, collect_debug, scan_root))
     except PermissionError:
         print(f"Permission denied accessing {root_path}", file=sys.stderr)
     
@@ -1187,6 +1206,7 @@ def main():
     parser.add_argument('-V', '--verbose', action='store_true', help='Show debug information about sources of TODOs, issues, and technologies')
     parser.add_argument('--no-progress', action='store_true', help='Disable progress indicators')
     parser.add_argument('--exclude', action='append', help='Additional directories to exclude (can be used multiple times)')
+    parser.add_argument('--filter', action='append', help='Additional directories to filter/ignore (can be used multiple times)')
     parser.add_argument('--show-name', action='store_true', help='Include Name column in table output')
     parser.add_argument('-v', '--version', action='version', version=f'p {VERSION}')
     
@@ -1195,6 +1215,10 @@ def main():
     # Apply command line exclusions to config
     if args.exclude:
         config.exclude_dirs.extend(args.exclude)
+    
+    # Apply command line filters to config
+    if args.filter:
+        config.filter_dirs.extend(args.filter)
     
     # Override progress setting if specified
     if args.no_progress:

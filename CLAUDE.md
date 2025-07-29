@@ -81,6 +81,7 @@ p [folder] [options]
 - `--show-name`: Include Name column in table output (off by default for compact display)
 - `--no-progress`: Disable progress indicators
 - `--exclude EXCLUDE`: Additional directories to exclude (repeatable)
+- `--filter FILTER`: Additional directories to filter/ignore (repeatable, default: archive)
 - `-h, --help`: Display help message
 - `-v, --version`: Display version (currently 1.0.0)
 

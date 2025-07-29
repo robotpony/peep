@@ -40,7 +40,7 @@ Scanning /Users/username/projects...
 ## Usage
 
 ```bash
-# Basic usage - scan current directory (compact view)
+# Basic usage
 ./p
 
 # Show project names in addition to folder names
@@ -72,7 +72,6 @@ Scanning /Users/username/projects...
 ```
 
 
-
 ## Configuration
 
 Create configuration files to customize behavior:
@@ -96,6 +95,7 @@ git_timeout = 10
 max_scan_depth = 15
 exclude_dirs = ["target", "build", "dist"]
 exclude_patterns = ["temp", "backup"]
+filter_dirs = ["archive", "old"]
 
 # Custom technology detection
 [custom_tech_files]
@@ -173,6 +173,7 @@ Projects are automatically scored based on:
 - `--show-name`: Include Name column in table output (off by default for compact display)
 - `--no-progress`: Disable progress indicators  
 - `--exclude EXCLUDE`: Additional directories to exclude (repeatable)
+- `--filter FILTER`: Additional directories to filter/ignore (repeatable, default: archive)
 - `-h, --help`: Display help message
 - `-v, --version`: Display version
 
