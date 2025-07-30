@@ -1238,10 +1238,6 @@ def main():
         print(f"Error: '{args.folder}' is not a directory", file=sys.stderr)
         sys.exit(1)
     
-    # Scan for projects with progress indication
-    if config.show_progress and not args.json:
-        print(f"Scanning {scan_path}...", file=sys.stderr)
-    
     projects = scan_projects(scan_path, collect_debug=args.verbose)
     
     if not projects:
