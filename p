@@ -38,6 +38,11 @@ class Config:
         self.issue_file_patterns = ['ISSUES', 'BUGS', 'BUG', 'ISSUE']
         self.issue_extensions = ['.md', '.txt', '']
         
+        # Ideas tracking configuration
+        self.ideas_subfolders = ['ideas', 'docs', 'design']
+        self.ideas_file_patterns = ['IDEAS', 'IDEA']
+        self.ideas_extensions = ['.md', '.txt', '']
+        
         # TODO tracking configuration
         self.todo_subfolders = ['tasks', 'docs', 'design']
         self.todo_file_patterns = ['TODO']
@@ -719,6 +724,11 @@ def count_issue_items(project_path: Union[str, Path], debug_info: List[Dict] = N
     return count_items_in_files(project_path, config.issue_file_patterns, 
                                config.issue_subfolders, config.issue_extensions, debug_info)
 
+def count_ideas_items(project_path: Union[str, Path], debug_info: List[Dict] = None) -> Dict[str, any]:
+    """Count ideas items using enhanced structured parsing."""
+    return count_items_in_files(project_path, config.ideas_file_patterns, 
+                               config.ideas_subfolders, config.ideas_extensions, debug_info)
+
 def count_todo_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
     """Legacy function for backward compatibility - count lines in TODO files."""
     metrics = count_todo_items(project_path, debug_info)
@@ -727,6 +737,11 @@ def count_todo_lines(project_path: Union[str, Path], debug_info: List[Dict] = No
 def count_issue_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
     """Legacy function for backward compatibility - count lines in issue files."""
     metrics = count_issue_items(project_path, debug_info)
+    return metrics['lines']
+
+def count_ideas_lines(project_path: Union[str, Path], debug_info: List[Dict] = None) -> int:
+    """Legacy function for backward compatibility - count lines in ideas files."""
+    metrics = count_ideas_items(project_path, debug_info)
     return metrics['lines']
 
 def calculate_importance_score(project: Dict[str, Union[str, int, float, Path, List[str], None]]) -> int:
@@ -794,17 +809,20 @@ def get_project_info(project_path: Union[str, Path], collect_debug: bool = False
     tech_debug = [] if collect_debug else None
     todo_debug = [] if collect_debug else None
     issue_debug = [] if collect_debug else None
+    ideas_debug = [] if collect_debug else None
     
     # Detect technologies
     technologies = detect_technologies(project_path, tech_debug)
     
-    # Enhanced TODO and issue metrics
+    # Enhanced TODO, issue, and ideas metrics
     todo_metrics = count_todo_items(project_path, todo_debug)
     issue_metrics = count_issue_items(project_path, issue_debug)
+    ideas_metrics = count_ideas_items(project_path, ideas_debug)
     
     # Legacy line counts for backward compatibility
     todo_lines = todo_metrics['total_lines']
     issue_lines = issue_metrics['lines']
+    ideas_lines = ideas_metrics['lines']
     
     # Get modification times
     try:
@@ -821,8 +839,10 @@ def get_project_info(project_path: Union[str, Path], collect_debug: bool = False
         'technologies': technologies,
         'todo_lines': todo_lines,
         'issue_lines': issue_lines,
+        'ideas_lines': ideas_lines,
         'todo_metrics': todo_metrics,
         'issue_metrics': issue_metrics,
+        'ideas_metrics': ideas_metrics,
         'mod_time': mod_time,
         'create_time': create_time,
         'path': project_path
@@ -833,7 +853,8 @@ def get_project_info(project_path: Union[str, Path], collect_debug: bool = False
         project_data['debug'] = {
             'technologies': tech_debug,
             'todos': todo_debug,
-            'issues': issue_debug
+            'issues': issue_debug,
+            'ideas': ideas_debug
         }
     
     # Calculate importance score
@@ -941,9 +962,9 @@ def calculate_column_widths(projects, show_name=False):
     
     # Minimum widths for headers (conditionally include Name column)
     if show_name:
-        widths = [len("Name"), len("Project"), len("Branch"), len("Git"), len("Stack"), len("TODOs"), len("Issues")]
+        widths = [len("Name"), len("Project"), len("Branch"), len("Git"), len("Stack"), len("TODOs"), len("Issues"), len("Ideas")]
     else:
-        widths = [len("Project"), len("Branch"), len("Git"), len("Stack"), len("TODOs"), len("Issues")]
+        widths = [len("Project"), len("Branch"), len("Git"), len("Stack"), len("TODOs"), len("Issues"), len("Ideas")]
     
     for project in projects:
         col_idx = 0
@@ -995,6 +1016,17 @@ def calculate_column_widths(projects, show_name=False):
         else:
             issue_text = str(project['issue_lines'])
         widths[col_idx] = max(widths[col_idx], len(issue_text))
+        col_idx += 1
+        
+        # Ideas - show enhanced format if available
+        if 'ideas_metrics' in project and project['ideas_metrics']:
+            ideas_metrics = project['ideas_metrics']
+            ideas_text = f"{ideas_metrics['items']['total']}"
+            if ideas_metrics['items']['open'] > 0:
+                ideas_text += f"({ideas_metrics['items']['open']})"
+        else:
+            ideas_text = str(project['ideas_lines'])
+        widths[col_idx] = max(widths[col_idx], len(ideas_text))
     
     # Enforce maximum widths
     if show_name:
@@ -1093,6 +1125,22 @@ def format_table_row(project, widths, show_name=False):
     if len(issue_text) > widths[col_idx]:
         issue_text = issue_text[:widths[col_idx]-1] + "…"
     columns.append(f" {issue_text:<{widths[col_idx]}} ")
+    col_idx += 1
+    
+    # Ideas - show enhanced format if available
+    if 'ideas_metrics' in project and project['ideas_metrics']:
+        ideas_metrics = project['ideas_metrics']
+        ideas_text = f""
+        if ideas_metrics['items']['open'] > 0:
+            ideas_text += f"{ideas_metrics['items']['open']}"
+        else:
+            ideas_text += f"0"
+        ideas_text += f"/{ideas_metrics['items']['total']}"
+    else:
+        ideas_text = str(project['ideas_lines'])
+    if len(ideas_text) > widths[col_idx]:
+        ideas_text = ideas_text[:widths[col_idx]-1] + "…"
+    columns.append(f" {ideas_text:<{widths[col_idx]}} ")
     
     return "│" + "│".join(columns) + "│"
 
@@ -1114,9 +1162,9 @@ def format_table_separator(widths, top=False, bottom=False):
 def format_table_header(widths, show_name=False):
     """Format the table header row."""
     if show_name:
-        headers = ["Name", "Project", "Branch", "Git", "Stack", "TODOs", "Issues"]
+        headers = ["Name", "Project", "Branch", "Git", "Stack", "TODOs", "Issues", "Ideas"]
     else:
-        headers = ["Project", "Branch", "Git", "Stack", "TODOs", "Issues"]
+        headers = ["Project", "Branch", "Git", "Stack", "TODOs", "Issues", "Ideas"]
     formatted_headers = [f" {header:<{width}} " for header, width in zip(headers, widths)]
     return "│" + "│".join(formatted_headers) + "│"
 
@@ -1192,6 +1240,25 @@ def format_debug_info(projects):
                 else:
                     # Legacy format
                     output.append(f"  • {issue_info['file']} ({issue_info['lines']} lines)")
+        
+        # Ideas sources
+        if debug_data.get('ideas'):
+            output.append("### Ideas Sources:")
+            for ideas_info in debug_data['ideas']:
+                if ideas_info.get('type') == 'structured':
+                    items = ideas_info.get('items', {})
+                    metadata = ideas_info.get('metadata', {})
+                    output.append(f"  • {ideas_info['file']} ({ideas_info['lines']} lines, {items.get('total', 0)} items)")
+                    if items.get('completed', 0) > 0:
+                        output.append(f"    - {items['completed']} completed, {items['open']} open")
+                    if metadata.get('severity_score', 0) > 0:
+                        output.append(f"    - Priority score: {metadata['severity_score']}")
+                    if metadata.get('labels'):
+                        labels_str = ', '.join(metadata['labels'])
+                        output.append(f"    - Labels: {labels_str}")
+                else:
+                    # Legacy format
+                    output.append(f"  • {ideas_info['file']} ({ideas_info['lines']} lines)")
         
         output.append("")  # Add blank line between projects
     
