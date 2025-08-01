@@ -483,22 +483,41 @@ def _has_any_code_files(project_path: Path) -> bool:
     return False
 
 def count_structured_items(content: str) -> Dict[str, int]:
-    """Count actual items instead of just lines in markdown content."""
+    """Count top-level unordered list items in markdown content with enhanced completion detection."""
     items = {'open': 0, 'completed': 0, 'total': 0}
     
     for line in content.split('\n'):
-        line = line.strip()
-        # Count markdown list items (bullet points)
+        # Only match top-level unordered list items (no leading whitespace)
         if re.match(r'^[-*+]\s+', line):
             items['total'] += 1
-            if re.match(r'^[-*+]\s+\[x\]', line, re.IGNORECASE):
+            
+            # Enhanced completion detection
+            is_completed = False
+            
+            # Method 1: Checkbox patterns [x] or [X]
+            if re.search(r'\[x\]', line, re.IGNORECASE):
+                is_completed = True
+            
+            # Method 2: Strikethrough patterns ~text~ (entire line or significant portion)
+            elif re.search(r'~[^~\n]+~', line):
+                is_completed = True
+            
+            # Method 3: Emphasis completion patterns *completed*, **done**, etc.
+            elif re.search(r'\*\s*(completed?|done|finished?)\s*\*', line, re.IGNORECASE):
+                is_completed = True
+            
+            # Method 4: Check mark or other completion indicators at start of item text
+            elif re.search(r'^[-*+]\s+[✓✅☑️]\s*', line):
+                is_completed = True
+            
+            # Method 5: Explicit completion words at the end in parentheses
+            elif re.search(r'\(\s*(completed?|done|finished?)\s*\)$', line, re.IGNORECASE):
+                is_completed = True
+            
+            if is_completed:
                 items['completed'] += 1
             else:
                 items['open'] += 1
-        # Count numbered lists
-        elif re.match(r'^\d+\.\s+', line):
-            items['total'] += 1
-            items['open'] += 1  # Assume numbered items are open
     
     return items
 

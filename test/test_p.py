@@ -132,19 +132,120 @@ class TestProjectScanner(unittest.TestCase):
         self.assertEqual(todo_count, 5)  # Updated to match actual line count including empty lines
     
     def test_count_structured_items(self):
-        """Test counting structured items in markdown."""
+        """Test counting structured items in markdown with enhanced completion detection."""
         content = """# TODO List
         
 - [ ] Task 1
-- [x] Task 2 (completed)
-- Task 3
-1. Numbered task 1
-2. Numbered task 2
+- [x] Task 2 (checkbox completed)
+- Task 3 basic
+- ~Task 4 strikethrough~
+- Task 5 *completed*
+- ✓ Task 6 with checkmark
+- Task 7 (done)
+  - Nested task (should be ignored)
+    - Double nested (should be ignored)
+1. Numbered task 1 (should be ignored)
+2. Numbered task 2 (should be ignored)
+
+Some text and headers should be ignored.
+
+- Final task
 """
         items = p_module.count_structured_items(content)
-        self.assertEqual(items['total'], 5)  # 3 bullet + 2 numbered
-        self.assertEqual(items['completed'], 1)  # Only [x] marked task
-        self.assertEqual(items['open'], 4)  # 2 unmarked bullet + 2 numbered
+        self.assertEqual(items['total'], 8)  # Only top-level bullet points, no numbered lists
+        self.assertEqual(items['completed'], 5)  # [x], ~strikethrough~, *completed*, ✓, (done)  
+        self.assertEqual(items['open'], 3)  # [ ], basic, final task
+    
+    def test_count_structured_items_completion_patterns(self):
+        """Test various completion patterns in structured items."""
+        content = """
+- [x] Standard checkbox completed
+- [X] Uppercase checkbox completed  
+- [ ] Empty checkbox (open)
+- ~Strikethrough item~
+- Task with ~partial strikethrough~ text
+- Item *completed*
+- Item **done**
+- Item *finished*
+- ✓ Checkmark at start
+- ✅ Green checkmark at start
+- ☑️ Ballot box checkmark at start
+- Regular item (completed)
+- Another item (done)
+- Final item (finished)
+- Open item without completion markers
+- Item with *incomplete* text (should be open)
+- Item with (incomplete) status (should be open)
+"""
+        items = p_module.count_structured_items(content)
+        self.assertEqual(items['total'], 17)
+        # Completed items: [x], [X], ~strikethrough~, ~partial~, *completed*, **done**, *finished*,
+        # ✓, ✅, ☑️, (completed), (done), (finished)
+        self.assertEqual(items['completed'], 13)
+        self.assertEqual(items['open'], 4)  # [ ], open item, *incomplete*, (incomplete)
+    
+    def test_count_structured_items_indentation_levels(self):
+        """Test that only top-level items are counted, ignoring nested items."""
+        content = """
+- Top level item 1
+  - Nested item 1.1 (should be ignored)
+    - Double nested 1.1.1 (should be ignored)
+  - Nested item 1.2 (should be ignored)
+- Top level item 2
+    - Indented item 2.1 (should be ignored)
+- Top level item 3
+  * Different bullet nested (should be ignored)
+  + Plus bullet nested (should be ignored)
+
+  - Item with leading blank (should be ignored)
+- Final top level item
+"""
+        items = p_module.count_structured_items(content)
+        self.assertEqual(items['total'], 4)  # Only the 4 top-level items
+        self.assertEqual(items['completed'], 0)  # None are marked as completed
+        self.assertEqual(items['open'], 4)
+    
+    def test_count_structured_items_numbered_lists_ignored(self):
+        """Test that numbered lists are completely ignored."""
+        content = """
+- Bullet item 1
+- Bullet item 2 [x]
+1. Numbered item 1 (should be ignored)
+2. Numbered item 2 [x] (should be ignored)
+3. Numbered item 3 *completed* (should be ignored)
+- Bullet item 3
+10. Double digit numbered (should be ignored)
+- Final bullet item
+"""
+        items = p_module.count_structured_items(content)
+        self.assertEqual(items['total'], 4)  # Only bullet items
+        self.assertEqual(items['completed'], 1)  # Only bullet item 2 [x]
+        self.assertEqual(items['open'], 3)
+    
+    def test_count_structured_items_edge_cases(self):
+        """Test edge cases and malformed content."""
+        content = """
+- Valid item
+-Invalid item without space (should be ignored)
+- Item with multiple [x] [x] checkboxes (should count as completed)
+- Item with mixed ~strikethrough~ and [x] patterns (should count as completed)  
+- Item ending with period *completed*.
+- 
+- Empty item content after bullet
+-   Item with spaces but no content after dash (should be ignored)
+
+# Headers should be ignored
+## Even with - dashes in them
+
+Regular text with - dashes should be ignored
+Text ending with dash -
+
+- Last valid item
+"""
+        items = p_module.count_structured_items(content)
+        self.assertEqual(items['total'], 8)  # All bullet items with spaces after dash
+        self.assertEqual(items['completed'], 3)  # Multiple [x], ~strikethrough~ and [x], *completed*.
+        self.assertEqual(items['open'], 5)  # Valid item, empty item, empty content, spaces item, last valid item
     
     def test_extract_issue_metadata(self):
         """Test extracting metadata from issue content."""

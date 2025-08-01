@@ -107,3 +107,57 @@ Replace "." with the actual directory name (`project_path.name`) to provide mean
 - Maintains backward compatibility for nested project scanning
 - Added comprehensive test coverage for both CWD and nested scenarios
 - All existing tests pass
+
+## Issue: Incorrect TODO/Issue/Idea Counting Logic
+
+### Problem Description
+The `count_structured_items` function (p:485-503) has incorrect counting logic for TODO, Issue, and Idea items in markdown files. The current implementation has several problems:
+
+1. **Counts all list lines instead of top-level UL elements**: The function counts any line matching list patterns, rather than focusing on top-level unordered list items
+2. **Limited completion detection**: Only recognizes `[x]` as completed items, missing other common completion patterns
+3. **Ignores indentation levels**: Should only count top-level items, not nested sub-items
+
+### Impact
+- Inaccurate counts for TODOs, Issues, and Ideas in project summaries
+- Counts include nested items and numbered lists when they should be excluded
+- Missing detection of completed items with different markdown patterns
+
+### Current Behavior
+The function currently:
+- Counts both bullet points (`-`, `*`, `+`) and numbered lists (`1.`, `2.`, etc.)
+- Treats all numbered items as "open" 
+- Only detects `[x]` (case-insensitive) as completed items
+- Counts all matching lines regardless of indentation level
+
+### Expected Behavior
+The function should:
+- Count only top-level unordered list items (bullet points at the start of lines)
+- Ignore numbered lists entirely 
+- Ignore nested/indented list items
+- Detect multiple completion patterns:
+  - `[x]` or `[X]` (checkboxes)
+  - `~strikethrough text~` (strikethrough)
+  - `*completed*` or similar emphasis patterns
+  - Lines starting with `✓` or other completion indicators
+
+### Root Cause
+In `count_structured_items` function (p:485-503):
+- Line 492: `if re.match(r'^[-*+]\s+', line):` - matches any bullet point without checking indentation level
+- Line 494: `if re.match(r'^[-*+]\s+\[x\]', line, re.IGNORECASE):` - only checks for `[x]` pattern
+- Lines 499-502: Counts numbered lists as open items when they should be ignored
+
+### Solution Requirements
+1. Modify regex to only match top-level unordered list items (no leading whitespace)
+2. Expand completion detection to handle multiple patterns
+3. Remove numbered list counting or make it optional
+4. Add comprehensive test cases for various completion patterns
+
+### Files Affected
+- `p` (main script) - `count_structured_items` function at lines 485-503
+- `test/test_p.py` - Need to update/add tests for the new counting logic
+
+### Test Cases Needed
+- Top-level vs. nested bullet points
+- Various completion patterns (`[x]`, `~text~`, `*completed*`, `✓`)
+- Mixed content with headers, blank lines, and nested lists
+- Edge cases with malformed markdown
