@@ -397,6 +397,32 @@ def main():
         self.assertEqual(len(debug_info), 1)
         self.assertEqual(debug_info[0]['file'], 'BUG_REPORT.md')
         self.assertEqual(debug_info[0]['lines'], 4)
+    
+    def test_cwd_folder_name_display(self):
+        """Test that CWD folder name shows actual directory name instead of '.'."""
+        # Create a project in the test directory
+        (self.test_path / "README.md").write_text("# Test Project")
+        
+        # Get project info with scan_root same as project_path (simulating CWD scan)
+        project_info = p_module.get_project_info(self.test_path, scan_root=self.test_path)
+        
+        # Should show actual directory name, not "."
+        self.assertEqual(project_info['folder'], self.test_path.name)
+        self.assertNotEqual(project_info['folder'], ".")
+    
+    def test_cwd_folder_name_nested_projects(self):
+        """Test that nested projects still show correct relative paths."""
+        # Create nested project structure
+        nested_dir = self.test_path / "nested" / "project"
+        nested_dir.mkdir(parents=True)
+        (nested_dir / "README.md").write_text("# Nested Project")
+        
+        # Get project info with scan_root as parent (simulating scanning from parent)
+        project_info = p_module.get_project_info(nested_dir, scan_root=self.test_path)
+        
+        # Should show the relative path from scan root
+        self.assertEqual(project_info['folder'], "nested/project")
+        self.assertNotEqual(project_info['folder'], ".")
 
 if __name__ == '__main__':
     unittest.main()

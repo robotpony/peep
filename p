@@ -791,6 +791,9 @@ def get_project_info(project_path: Union[str, Path], collect_debug: bool = False
         scan_root = Path(scan_root)
         try:
             folder_name = str(project_path.relative_to(scan_root))
+            # Replace "." with actual directory name for better UX
+            if folder_name == ".":
+                folder_name = project_path.name
         except ValueError:
             # Fallback if project_path is not relative to scan_root
             folder_name = project_path.name
@@ -925,6 +928,9 @@ def scan_projects(root_path: Union[str, Path], depth: int = 0, collect_debug: bo
     # Set scan_root to root_path if not provided (first call)
     if scan_root is None:
         scan_root = root_path
+        # Check if the root directory itself is a project
+        if is_project_directory(root_path):
+            projects.append(get_project_info(root_path, collect_debug, scan_root))
     
     # Check depth limit
     if depth > config.max_scan_depth:
