@@ -10,26 +10,26 @@ the question, "where are these projects at," more or less.
 ➜ ./p ..
 Scanning /Users/username/projects...
 
-┌─────────────────────────────┬────────┬─────┬──────────────────────────────┬────────┬────────┐
-│ Project                     │ Branch │ Git │ Technologies                 │ TODOs  │ Issues │
-├─────────────────────────────┼────────┼─────┼──────────────────────────────┼────────┼────────┤
-│ thwarter                    │ main   │ ✓   │ Rust                         │ 15/170 │ 86/86  │
-│ oview                       │ main   │ ?   │ Python, Hugo                 │ 0/0    │ 42/42  │
-│ peep                        │ main   │ M   │ Python                       │ 11/19  │ 14/14  │
-│ spacecommand.ca             │ main   │ M?  │ JS, node.js, npm, react      │ 6/70   │ 3/3    │
-│ statsim                     │ main   │ M   │ JS, node.js, npm, typescript │ 0/131  │ 0/0    │
-│ robotpony-render            │ main   │ ↑?  │ JS, node.js, npm, typescript │ 2/2    │ 0/0    │
-│ w42                         │ main   │ M   │ Hugo                         │ 0/0    │ 0/0    │
-└─────────────────────────────┴────────┴─────┴──────────────────────────────┴────────┴────────┘
+┌─────────────────────────────┬────────┬─────┬──────────────────────────────┬────────┬────────┬───────┐
+│ Project                     │ Branch │ Git │ Stack                        │ TODOs  │ Issues │ Ideas │
+├─────────────────────────────┼────────┼─────┼──────────────────────────────┼────────┼────────┼───────┤
+│ thwarter                    │ main   │ ✓   │ Rust                         │ 15/170 │ 86/86  │ 12/15 │
+│ oview                       │ main   │ ?   │ Python, Hugo                 │ 0/0    │ 42/42  │ 8/10  │
+│ peep                        │ main   │ M   │ Python                       │ 11/19  │ 14/14  │ 3/3   │
+│ spacecommand.ca             │ main   │ M?  │ JS, node.js, npm, react      │ 6/70   │ 3/3    │ 0/2   │
+│ statsim                     │ main   │ M   │ JS, node.js, npm, typescript │ 0/131  │ 0/0    │ 0/0   │
+│ robotpony-render            │ main   │ ↑?  │ JS, node.js, npm, typescript │ 2/2    │ 0/0    │ 0/0   │
+│ w42                         │ main   │ M   │ Hugo                         │ 0/0    │ 0/0    │ 0/0   │
+└─────────────────────────────┴────────┴─────┴──────────────────────────────┴────────┴────────┴───────┘
 ```
 
 
 ## Features
 
 - **Smart Project Detection**: Automatically identifies projects by README.md, package.json, git repos, and other indicators
-- **Technology Detection**: Recognizes 20+ technologies including Python, JavaScript, Rust, Go, Docker, and more
+- **Technology Stack Detection**: Recognizes 20+ technologies including Python, JavaScript, Rust, Go, Docker, and more
 - **Git Integration**: Shows branch names and status indicators (clean ✓, modified M, untracked ?, ahead ↑, behind ↓)
-- **Enhanced TODO/Issue Tracking**: Structured parsing of markdown files plus inline code comment scanning with priority scoring
+- **Enhanced TODO/Issue/Ideas Tracking**: Structured parsing of markdown files plus inline code comment scanning with priority scoring
 - **Importance Scoring**: Smart sorting that prioritizes projects with issues, git changes, or TODOs
 - **Flexible Display**: Compact view by default, optional name column for additional project information
 - **Configurable**: Extensive configuration support via TOML files
@@ -72,9 +72,10 @@ Scanning /Users/username/projects...
 ```
 
 
-## Configuration
+### Configuration
 
-Create configuration files to customize behavior:
+Customize behavior with TOML configuration files:
+
 - `~/.config/p/config.toml` (global)
 - `p.toml` or `.p.toml` (project-specific)
 
@@ -96,6 +97,11 @@ max_scan_depth = 15
 exclude_dirs = ["target", "build", "dist"]
 exclude_patterns = ["temp", "backup"]
 filter_dirs = ["archive", "old"]
+
+# Ideas tracking configuration
+ideas_subfolders = ["ideas", "docs", "design"]
+ideas_file_patterns = ["IDEAS", "IDEA"]
+ideas_extensions = [".md", ".txt", ""]
 
 # Custom technology detection
 [custom_tech_files]
@@ -128,48 +134,45 @@ Automatically detects technologies from:
 - **Dependencies**: React, Vue, Angular, TypeScript from package.json
 - **Custom**: Add your own via configuration
 
-### Enhanced Python Detection
-Python projects are detected through multiple methods:
-- **Traditional files**: requirements.txt, setup.py, pyproject.toml, Pipfile, etc.
-- **Source files**: .py files in root, src/, lib/, tests/, scripts/ directories
-- **Executables**: Scripts with Python shebangs (even without .py extension)
-- **Test files**: Python test files in test/ or tests/ directories
-
-### Early-Stage Project Detection
-Projects in planning or initial stages are marked as `n/a`:
-- **README-only**: Projects with README.md but no source code yet
-- **Git repositories**: Empty git repos waiting for first commit
-- **Planning stage**: Projects with TODO.md, PLANNING.md, DESIGN.md but no code
-- **Documentation-only**: Projects with specs, notes, or roadmaps but no implementation
-
 Supports: JavaScript, Python, Rust, Go, Java, PHP, Ruby, Docker, and many more.
 
-## TODO and Issue Tracking
+**Special Cases:**
+- Python detection includes traditional files (requirements.txt, setup.py), source files, executables with shebangs, and test files
+- Early-stage projects (README-only, empty git repos, planning documents) are marked as `n/a`
 
-The tool provides enhanced tracking of project tasks and issues:
+## TODO, Issue, and Ideas Tracking
+
+The tool provides enhanced tracking of project tasks, issues, and ideas:
 
 ### Display Format
 - **TODOs**: Shows `inline/structured` format (e.g., `5/12` = 5 inline TODOs in code, 12 total items)
 - **Issues**: Shows `open/total` format (e.g., `3/8` = 3 open issues, 8 total items)
+- **Ideas**: Shows `open/total` format (e.g., `3/5` = 3 open ideas, 5 total items)
 
 ### Sources Detected
-- **Structured Files**: TODO.md, TODOS.md, ISSUES.md, BUGS.md in root and subfolders
+- **Structured Files**: TODO.md, TODOS.md, ISSUES.md, BUGS.md, IDEAS.md in root and subfolders
 - **Inline Comments**: TODO, FIXME, BUG, HACK comments in source code
 - **Priority Detection**: High/medium/low priority markers in markdown content
 - **Completion Tracking**: Markdown checkboxes `[x]` for completed items
 
+#### File Detection Patterns
+- **TODOs**: TODO.md files in root, tasks/, docs/, design/ folders
+- **Issues**: ISSUES.md, BUGS.md files in root, bugs/, issues/, tasks/, docs/, design/ folders  
+- **Ideas**: IDEAS.md files in root, ideas/, docs/, design/ folders
+
 ### Importance Scoring
 Projects are automatically scored based on:
 - Issue severity and priority markers
-- Open vs. completed item ratios  
+- Open vs. completed item ratios for TODOs, issues, and ideas
 - Git repository status (uncommitted changes)
 - TODO urgency (FIXME/BUG comments weighted higher)
+- Active idea development (projects with many ideas score higher)
 
 ## Options
 
 - `-s, --sort [alpha|modified|created|importance]`: Sort projects
 - `-j, --json`: Output results as JSON
-- `-V, --verbose`: Show debug information about sources of TODOs, issues, and technologies
+- `-V, --verbose`: Show debug information about sources of TODOs, issues, ideas, and technologies
 - `--show-name`: Include Name column in table output (off by default for compact display)
 - `--no-progress`: Disable progress indicators  
 - `--exclude EXCLUDE`: Additional directories to exclude (repeatable)
