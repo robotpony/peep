@@ -2,9 +2,9 @@
 
 ## Testing
 
-- Test Issues/TODOs/Ideas columns and ensure counts are accurate
-- Review documentation (should be succinct + up to date)
+- [x] Test Issues/TODOs/Ideas columns and ensure counts are accurate
+- [x]Review documentation (should be succinct + up to date)
 
 ## Performance
 
-- Fix top 1-2 performance issues
+- Analyize performance and look for caching ops or better strategies
